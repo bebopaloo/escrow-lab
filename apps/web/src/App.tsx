@@ -2,7 +2,7 @@ import { useEffect, useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { fetchHealth, fetchSession } from "./api.ts";
 import { ApprovalQueue } from "./ApprovalQueue.tsx";
-import { DealList } from "./DealList.tsx";
+import { Deals } from "./Deals.tsx";
 import { SignIn } from "./SignIn.tsx";
 import { SignOut } from "./SignOut.tsx";
 
@@ -47,7 +47,11 @@ export function App() {
       {session.data?.user && (
         <>
           <p role="status">Signed in as {session.data.user.displayName}.</p>
-          {session.data.user.role === "approver" ? <ApprovalQueue /> : <DealList />}
+          {session.data.user.role === "approver" ? (
+            <ApprovalQueue />
+          ) : (
+            <Deals role={session.data.user.role} csrfToken={session.data.csrfToken} />
+          )}
           <SignOut csrfToken={session.data.csrfToken} />
         </>
       )}
