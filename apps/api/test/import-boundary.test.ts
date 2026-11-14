@@ -122,3 +122,46 @@ describe("scripted fake factories", () => {
     expect(await restrictedMessages(code, "apps/api/src/modules/deals/service.test.ts")).toBe(0);
   });
 });
+
+async function dynamicMessages(code: string, file: string): Promise<number> {
+  const [result] = await eslint.lintText(code, { filePath: resolve(root, file) });
+  return (result?.messages ?? []).filter((m) => m.ruleId === "boundary/no-dynamic-fake-import")
+    .length;
+}
+
+describe("dynamic import of a fake", () => {
+  const prod = "apps/api/src/routes/example.ts";
+  const test = "apps/api/src/routes/example.test.ts";
+  const paths = [
+    "../adapters/chain/index.ts",
+    "../adapters/chain/fake.ts",
+    "../adapters/payment-rail/index.ts",
+    "../adapters/payment-rail/fake.ts",
+    "../adapters/fake-core.ts",
+  ];
+
+  it.each(paths)("rejects import(%s) in a production file", async (path) => {
+    expect(await dynamicMessages(`await import("${path}");\n`, prod)).toBe(1);
+    expect(await dynamicMessages(`await import(\`${path}\`);\n`, prod)).toBe(1);
+  });
+
+  it.each(paths)("allows import(%s) in a test file", async (path) => {
+    expect(await dynamicMessages(`await import("${path}");\n`, test)).toBe(0);
+  });
+
+  it("allows a dynamic import of a fake in a test folder file", async () => {
+    const file = "apps/api/test/example.ts";
+    expect(await dynamicMessages('await import("../src/adapters/chain/fake.ts");\n', file)).toBe(0);
+  });
+
+  it("rejects a dynamic import with a source that the rule cannot check", async () => {
+    expect(await dynamicMessages("await import(name);\n", prod)).toBe(1);
+    expect(await dynamicMessages("await import(`../${name}`);\n", prod)).toBe(1);
+    expect(await dynamicMessages("await import(a + b);\n", test)).toBe(0);
+  });
+
+  it("allows a dynamic import of an unrelated module", async () => {
+    expect(await dynamicMessages('await import("./other.ts");\n', prod)).toBe(0);
+    expect(await dynamicMessages('await import("node:path");\n', prod)).toBe(0);
+  });
+});

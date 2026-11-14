@@ -40,7 +40,9 @@ export default defineConfig(
     // Only test code can import a fake with a failure script.
     files: ["apps/api/src/**/*.ts"],
     ignores: ["**/*.test.ts"],
+    plugins: { boundary },
     rules: {
+      "boundary/no-dynamic-fake-import": "error",
       "no-restricted-imports": [
         "error",
         {
@@ -68,7 +70,7 @@ export default defineConfig(
   {
     // The two fakes build on the shared core.
     files: ["apps/api/src/adapters/chain/fake.ts", "apps/api/src/adapters/payment-rail/fake.ts"],
-    rules: { "no-restricted-imports": "off" },
+    rules: { "no-restricted-imports": "off", "boundary/no-dynamic-fake-import": "off" },
   },
   {
     files: ["**/*.js"],
