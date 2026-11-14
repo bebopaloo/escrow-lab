@@ -494,6 +494,28 @@ describe("Milestone evidence", () => {
     expect(await screen.findByRole("button", { name: "Send evidence" })).toBeDisabled();
   });
 
+  it("refuses whitespace-only evidence and links the error to the field", async () => {
+    signedInAs(CAROL);
+    serve(withFirst({ state: "awaiting_evidence" }));
+    let posted = false;
+    server.use(
+      http.post(`*/api/milestones/${MILESTONE_ID}/evidence`, () => {
+        posted = true;
+        return HttpResponse.json({ error: "x", requestId: "r" }, { status: 400 });
+      }),
+    );
+    renderApp();
+    await openDeal();
+    await userEvent.type(await screen.findByLabelText("Evidence"), "   ");
+    await userEvent.click(screen.getByRole("button", { name: "Send evidence" }));
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent("Write the evidence before you send it.");
+    const field = screen.getByLabelText("Evidence");
+    expect(field).toHaveAttribute("aria-invalid", "true");
+    expect(field.getAttribute("aria-describedby")).toContain(alert.id);
+    expect(posted).toBe(false);
+  });
+
   it("links an API refusal to the evidence field", async () => {
     signedInAs(CAROL);
     serve(withFirst({ state: "awaiting_evidence" }));
@@ -521,13 +543,14 @@ describe("Milestone evidence", () => {
     expect(screen.queryByLabelText("Evidence")).not.toBeInTheDocument();
   });
 
-  it("shows the Buyer the evidence with Accept and Reject, and the Seller neither", async () => {
+  it("shows the Seller a waiting message, without Accept or Reject", async () => {
     signedInAs(CAROL);
     serve(withFirst({ state: "evidence_sent", evidenceText: "Here is the link" }));
     renderApp();
     await openDeal();
     expect(await screen.findByText("Waiting for the Buyer to review the evidence.")).toBeVisible();
     expect(screen.queryByRole("button", { name: "Accept the evidence" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Reject the evidence" })).not.toBeInTheDocument();
   });
 
   it("lets the Buyer accept the evidence", async () => {

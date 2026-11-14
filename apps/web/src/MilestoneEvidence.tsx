@@ -24,6 +24,7 @@ export function MilestoneEvidence({ dealId, milestone, role, csrfToken }: Milest
   const [evidence, setEvidence] = useState("");
   const [reason, setReason] = useState("");
   const [reasonMissing, setReasonMissing] = useState(false);
+  const [evidenceMissing, setEvidenceMissing] = useState(false);
   const [notice, setNotice] = useState("");
 
   function done(message: string) {
@@ -51,6 +52,11 @@ export function MilestoneEvidence({ dealId, milestone, role, csrfToken }: Milest
 
   function submitEvidence(event: SubmitEvent) {
     event.preventDefault();
+    if (evidence.trim() === "") {
+      setEvidenceMissing(true);
+      return;
+    }
+    setEvidenceMissing(false);
     send.mutate(evidence);
   }
 
@@ -67,6 +73,11 @@ export function MilestoneEvidence({ dealId, milestone, role, csrfToken }: Milest
     ? "Give a reason for the rejection."
     : reject.isError
       ? reject.error.message
+      : null;
+  const sendError = evidenceMissing
+    ? "Write the evidence before you send it."
+    : send.isError
+      ? send.error.message
       : null;
   const state = milestone.state;
 
@@ -92,16 +103,16 @@ export function MilestoneEvidence({ dealId, milestone, role, csrfToken }: Milest
             required
             rows={5}
             maxLength={MAX_EVIDENCE_LENGTH}
-            aria-invalid={send.isError ? true : undefined}
-            aria-describedby={send.isError ? SEND_ERROR_ID : undefined}
+            aria-invalid={sendError !== null ? true : undefined}
+            aria-describedby={sendError !== null ? SEND_ERROR_ID : undefined}
             value={evidence}
             onChange={(event) => {
               setEvidence(event.target.value);
             }}
           />
-          {send.isError && (
+          {sendError !== null && (
             <p id={SEND_ERROR_ID} role="alert">
-              {send.error.message}
+              {sendError}
             </p>
           )}
           <p>

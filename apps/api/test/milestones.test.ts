@@ -238,6 +238,34 @@ describe("Milestone evidence", () => {
     });
   });
 
+  describe("two actions at the same time", () => {
+    it("lets one of two accept requests win and audits one event", async () => {
+      const { dealId, milestoneId } = await sendEvidence();
+      const responses = await Promise.all([
+        act(ALICE, milestoneId, "accept"),
+        act(ALICE, milestoneId, "accept"),
+      ]);
+      expect(responses.map((r) => r.statusCode).sort()).toEqual([200, 409]);
+      expect((await row(milestoneId))?.state).toBe("accepted");
+      expect((await auditActions(dealId)).filter((a) => a === "accept")).toHaveLength(1);
+    });
+
+    it("lets one of an accept and a reject win and audits one event", async () => {
+      const { dealId, milestoneId } = await sendEvidence();
+      const responses = await Promise.all([
+        act(ALICE, milestoneId, "accept"),
+        act(ALICE, milestoneId, "reject", { reason: "Wrong file" }),
+      ]);
+      expect(responses.map((r) => r.statusCode).sort()).toEqual([200, 409]);
+      const decisions = (await auditActions(dealId)).filter(
+        (a) => a === "accept" || a === "reject",
+      );
+      expect(decisions).toHaveLength(1);
+      const state = (await row(milestoneId))?.state;
+      expect(state).toBe(decisions[0] === "accept" ? "accepted" : "awaiting_evidence");
+    });
+  });
+
   describe("accept evidence", () => {
     it("moves the Milestone to accepted and audits it", async () => {
       const { dealId, milestoneId } = await sendEvidence();
