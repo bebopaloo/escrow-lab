@@ -1,6 +1,7 @@
 export {
   insertMilestones,
   listMilestones,
+  markPaidAndOpenNext,
   openFirstMilestone,
   type NewMilestone,
 } from "./store.ts";

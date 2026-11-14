@@ -48,7 +48,7 @@ export function App() {
         <>
           <p role="status">Signed in as {session.data.user.displayName}.</p>
           {session.data.user.role === "approver" ? (
-            <ApprovalQueue />
+            <ApprovalQueue csrfToken={session.data.csrfToken} />
           ) : (
             <Deals
               role={session.data.user.role}

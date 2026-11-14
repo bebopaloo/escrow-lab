@@ -29,6 +29,13 @@
       "when": 1794676182917,
       "tag": "0003_pale_thunderbolts",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1794678415586,
+      "tag": "0004_regular_blackheart",
+      "breakpoints": true
     }
   ]
 }
