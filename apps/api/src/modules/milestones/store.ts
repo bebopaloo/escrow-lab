@@ -130,3 +130,31 @@ export async function applyMilestoneAction(
     return { kind: "done", milestone };
   });
 }
+
+/**
+ * Marks a Milestone `paid` and opens the next one of its Deal. Returns `last` when the Deal has no
+ * next Milestone.
+ */
+export async function markPaidAndOpenNext(
+  db: Pick<Database, "update">,
+  milestoneId: string,
+): Promise<{ dealId: string; next: "opened" | "last" }> {
+  const [paid] = await db
+    .update(schema.milestones)
+    .set({ state: "paid" })
+    .where(eq(schema.milestones.id, milestoneId))
+    .returning({ dealId: schema.milestones.dealId, position: schema.milestones.position });
+  if (paid === undefined) throw new Error("The Milestone was not saved");
+  const opened = await db
+    .update(schema.milestones)
+    .set({ state: "awaiting_evidence" })
+    .where(
+      and(
+        eq(schema.milestones.dealId, paid.dealId),
+        eq(schema.milestones.position, paid.position + 1),
+        eq(schema.milestones.state, "pending"),
+      ),
+    )
+    .returning({ id: schema.milestones.id });
+  return { dealId: paid.dealId, next: opened.length > 0 ? "opened" : "last" };
+}

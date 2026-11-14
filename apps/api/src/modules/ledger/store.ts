@@ -16,3 +16,17 @@ export async function recordDeposit(
 ): Promise<void> {
   await db.insert(schema.ledgerEntries).values({ ...deposit, kind: "deposit" });
 }
+
+export interface NewPayout {
+  dealId: string;
+  amountMinor: number;
+  chainTxId: string;
+}
+
+/**
+ * Appends a Payout. Call it only when the chain has confirmed the transfer, in the transaction that
+ * marks the Milestone paid.
+ */
+export async function recordPayout(db: Pick<Database, "insert">, payout: NewPayout): Promise<void> {
+  await db.insert(schema.ledgerEntries).values({ ...payout, kind: "payout" });
+}

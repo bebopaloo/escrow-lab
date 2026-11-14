@@ -13,6 +13,7 @@ import {
 import { createChain, type Chain } from "./adapters/chain/index.ts";
 import { createPaymentRail, type PaymentRail } from "./adapters/payment-rail/index.ts";
 import type { Config } from "./config.ts";
+import { approvalRoutes } from "./modules/approval/index.ts";
 import { dealRoutes } from "./modules/deals/index.ts";
 import { identityRoutes } from "./modules/identity/index.ts";
 import { milestoneRoutes } from "./modules/milestones/index.ts";
@@ -96,6 +97,7 @@ export async function buildApp({
   await app.register(identityRoutes, { prefix: "/api", db });
   await app.register(dealRoutes, { prefix: "/api", db, chain, paymentRail });
   await app.register(milestoneRoutes, { prefix: "/api", db });
+  await app.register(approvalRoutes, { prefix: "/api", db, chain });
 
   return app;
 }

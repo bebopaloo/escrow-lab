@@ -73,7 +73,7 @@ test("a Buyer funds a Deal and the first Milestone opens", async ({ page }) => {
   expect(results.violations).toEqual([]);
 });
 
-test("a Seller sends evidence, the Buyer rejects it, then accepts the new evidence", async ({
+test("a Seller sends evidence, the Buyer rejects it, then accepts the new evidence, and an Approver pays it", async ({
   page,
 }) => {
   const title = `Evidence ${Date.now().toString()}`;
@@ -126,4 +126,16 @@ test("a Seller sends evidence, the Buyer rejects it, then accepts the new eviden
   await expect(page.getByRole("row", { name: /Draft.*accepted/ })).toBeVisible();
   const doneScan = await new AxeBuilder({ page }).withTags(WCAG_22_AA).analyze();
   expect(doneScan.violations).toEqual([]);
+
+  await page.getByRole("button", { name: "Sign out" }).click();
+  await page.getByRole("button", { name: /Erin Approver/ }).click();
+  await expect(page.getByRole("heading", { name: "Approval queue" })).toBeVisible();
+  const entry = page.getByRole("listitem").filter({ hasText: title });
+  await expect(entry).toBeVisible();
+  const queueScan = await new AxeBuilder({ page }).withTags(WCAG_22_AA).analyze();
+  expect(queueScan.violations).toEqual([]);
+  await entry.getByRole("button", { name: "Approve the Payout for Draft" }).click();
+  await expect(page.getByText("The Payout for Draft is paid.")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Approval queue" })).toBeFocused();
+  await expect(page.getByRole("listitem").filter({ hasText: title })).toHaveCount(0);
 });

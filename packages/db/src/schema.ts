@@ -129,3 +129,32 @@ export const ledgerEntries = pgTable(
     check("ledger_entries_amount_check", sql`${table.amountMinor} >= 1`),
   ],
 );
+
+/** One Payout for each Milestone. The key goes to the chain on every try, so it cannot pay twice. */
+export const payouts = pgTable(
+  "payouts",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    milestoneId: uuid("milestone_id")
+      .notNull()
+      .references(() => milestones.id),
+    idempotencyKey: text("idempotency_key").notNull(),
+    state: text("state", { enum: ["pending", "confirmed", "failed"] })
+      .notNull()
+      .default("pending"),
+    attempts: integer("attempts").notNull().default(0),
+    nextTryAt: timestamp("next_try_at", { withTimezone: true }),
+    approvedBy: uuid("approved_by")
+      .notNull()
+      .references(() => users.id),
+    chainTxId: text("chain_tx_id"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    unique("payouts_milestone_unique").on(table.milestoneId),
+    unique("payouts_idempotency_key_unique").on(table.idempotencyKey),
+    index("payouts_approved_by_idx").on(table.approvedBy),
+    index("payouts_state_idx").on(table.state),
+    check("payouts_state_check", sql`${table.state} in ('pending', 'confirmed', 'failed')`),
+  ],
+);

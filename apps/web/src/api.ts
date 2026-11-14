@@ -1,4 +1,6 @@
 import {
+  ApprovalQueueResponse,
+  ApprovePayoutResponse,
   DealListResponse,
   DealResponse,
   ErrorResponse,
@@ -148,4 +150,32 @@ export function acceptEvidence(id: string, csrfToken: string) {
 
 export function rejectEvidence(id: string, reason: string, csrfToken: string) {
   return postMilestoneAction(id, "reject", csrfToken, { reason });
+}
+
+export async function fetchApprovals(signal?: AbortSignal): Promise<ApprovalQueueResponse> {
+  const url = new URL("/api/approvals", window.location.origin);
+  url.searchParams.set("limit", "100");
+  const response = await fetch(url, signal ? { signal } : {});
+  return ApprovalQueueResponse.parse(await readJson(response, 200, "Approval queue"));
+}
+
+/** The API refused the approval, for example because the state changed. */
+export class ApprovalError extends Error {}
+
+export async function approvePayout(
+  milestoneId: string,
+  csrfToken: string,
+): Promise<ApprovePayoutResponse> {
+  const response = await fetch(
+    new URL(`/api/milestones/${encodeURIComponent(milestoneId)}/payout`, window.location.origin),
+    {
+      method: "POST",
+      headers: { "content-type": "application/json", "x-csrf-token": csrfToken },
+      body: JSON.stringify({}),
+    },
+  );
+  if (response.status !== 200) {
+    throw new ApprovalError("The approval failed. Reload the queue to see the current state.");
+  }
+  return ApprovePayoutResponse.parse(await response.json());
 }
