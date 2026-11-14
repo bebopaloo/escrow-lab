@@ -3,6 +3,8 @@ import { DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE } from "./deals.ts";
 
 export const WRONG_PAYOUT_STATE = "The Payout cannot be approved in this state.";
 
+export const WRONG_RETRY_STATE = "Only a failed Payout can be retried.";
+
 export const PayoutState = z.enum(["pending", "confirmed", "failed"]);
 export type PayoutState = z.infer<typeof PayoutState>;
 
@@ -17,6 +19,14 @@ export const ApprovePayoutResponse = z
   })
   .strict();
 export type ApprovePayoutResponse = z.infer<typeof ApprovePayoutResponse>;
+
+export const PayoutIdParams = z.object({ id: z.uuid() }).strict();
+
+/** The body of a retry request: no fields. The Payout keeps its Idempotency key. */
+export const RetryPayoutRequest = z.object({}).strict();
+
+export const RetryPayoutResponse = z.object({ payoutId: z.uuid(), state: PayoutState }).strict();
+export type RetryPayoutResponse = z.infer<typeof RetryPayoutResponse>;
 
 const QueueBase = { dealId: z.uuid(), dealTitle: z.string() };
 

@@ -6,6 +6,10 @@ import {
   ApprovePayoutResponse,
   ErrorResponse,
   MilestoneIdParams,
+  PayoutIdParams,
+  RetryPayoutRequest,
+  RetryPayoutResponse,
+  WRONG_RETRY_STATE,
   WRONG_PAYOUT_STATE,
 } from "@escrow-lab/shared";
 import type { preHandlerHookHandler } from "fastify";
@@ -13,6 +17,7 @@ import type { FastifyPluginCallbackZod } from "fastify-type-provider-zod";
 import type { Chain } from "../../adapters/chain/index.ts";
 import { requireRole } from "../identity/index.ts";
 import { approvePayout } from "./approve.ts";
+import { retryPayout } from "./retry.ts";
 import { listApprovalQueue } from "./queue.ts";
 
 const APPROVE_LIMIT = 30;
@@ -76,6 +81,33 @@ export const approvalRoutes: FastifyPluginCallbackZod<ApprovalOptions> = (
         milestoneId: outcome.milestoneId,
         state: outcome.state,
       };
+    },
+  );
+
+  app.post(
+    "/payouts/:id/retry",
+    {
+      config: { rateLimit: { max: APPROVE_LIMIT, timeWindow: "1 minute" } },
+      onRequest: [requireRole(db, "approver"), csrf],
+      schema: {
+        params: PayoutIdParams,
+        body: RetryPayoutRequest,
+        response: {
+          200: RetryPayoutResponse,
+          404: ErrorResponse,
+          409: ErrorResponse,
+        },
+      },
+    },
+    async (request, reply) => {
+      const outcome = await retryPayout(db, request.user?.id ?? "", request.params.id);
+      if (outcome.kind === "not_found") {
+        return reply.status(404).send({ error: "Not found", requestId: request.id });
+      }
+      if (outcome.kind === "wrong_state") {
+        return reply.status(409).send({ error: WRONG_RETRY_STATE, requestId: request.id });
+      }
+      return { payoutId: outcome.payoutId, state: "pending" as const };
     },
   );
   done();

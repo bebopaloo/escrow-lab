@@ -53,7 +53,7 @@ function renderQueue() {
 }
 
 describe("ApprovalQueue", () => {
-  it("lists accepted Milestones with an Approve button and the failed items without one", async () => {
+  it("lists accepted Milestones with an Approve button and the failed Payout with a Retry button", async () => {
     server.use(http.get("*/api/approvals", () => page(ITEMS)));
     renderQueue();
     const milestone = await screen.findByRole("listitem", { name: /Draft/ });
@@ -65,7 +65,9 @@ describe("ApprovalQueue", () => {
 
     const payout = screen.getByRole("listitem", { name: /Final/ });
     expect(within(payout).getByText(/Payout failed/)).toBeVisible();
-    expect(within(payout).queryByRole("button")).not.toBeInTheDocument();
+    expect(
+      within(payout).getByRole("button", { name: "Retry the Payout for Final" }),
+    ).toBeEnabled();
 
     const deal = screen.getByRole("listitem", { name: /Website/ });
     expect(within(deal).getByText(/Funding failed/)).toBeVisible();
@@ -168,5 +170,44 @@ describe("ApprovalQueue", () => {
       await screen.findByRole("button", { name: "Approve the Payout for Draft" }),
     );
     expect(await screen.findByRole("alert")).toHaveTextContent("The approval failed");
+  });
+
+  it("retries a failed Payout with the CSRF token, announces it and reloads the queue", async () => {
+    let retried = false;
+    let token: string | null = null;
+    server.use(
+      http.get("*/api/approvals", () => page(retried ? [] : [ITEMS[1]])),
+      http.post(`*/api/payouts/${PAYOUT}/retry`, async ({ request }) => {
+        token = request.headers.get("x-csrf-token");
+        await delay(20);
+        retried = true;
+        return HttpResponse.json({ payoutId: PAYOUT, state: "pending" });
+      }),
+    );
+    renderQueue();
+    const button = await screen.findByRole("button", { name: "Retry the Payout for Final" });
+    await userEvent.click(button);
+    expect(button).toBeDisabled();
+    expect(await screen.findByText("The Payout for Final will be tried again.")).toHaveAttribute(
+      "role",
+      "status",
+    );
+    expect(token).toBe("token-1");
+    expect(await screen.findByText("Nothing waits for approval.")).toBeVisible();
+    expect(screen.getByRole("heading", { name: "Approval queue" })).toHaveFocus();
+  });
+
+  it("shows an error when the API refuses the retry", async () => {
+    server.use(
+      http.get("*/api/approvals", () => page([ITEMS[1]])),
+      http.post(`*/api/payouts/${PAYOUT}/retry`, () =>
+        HttpResponse.json({ error: "x", requestId: "r" }, { status: 409 }),
+      ),
+    );
+    renderQueue();
+    await userEvent.click(
+      await screen.findByRole("button", { name: "Retry the Payout for Final" }),
+    );
+    expect(await screen.findByRole("alert")).toHaveTextContent("The retry failed");
   });
 });

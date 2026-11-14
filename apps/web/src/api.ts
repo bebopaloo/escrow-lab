@@ -1,6 +1,7 @@
 import {
   ApprovalQueueResponse,
   ApprovePayoutResponse,
+  RetryPayoutResponse,
   DealListResponse,
   DealResponse,
   ErrorResponse,
@@ -178,4 +179,25 @@ export async function approvePayout(
     throw new ApprovalError("The approval failed. Reload the queue to see the current state.");
   }
   return ApprovePayoutResponse.parse(await response.json());
+}
+
+/** The API refused the retry, for example because the Payout is no longer failed. */
+export class RetryError extends Error {}
+
+export async function retryPayout(
+  payoutId: string,
+  csrfToken: string,
+): Promise<RetryPayoutResponse> {
+  const response = await fetch(
+    new URL(`/api/payouts/${encodeURIComponent(payoutId)}/retry`, window.location.origin),
+    {
+      method: "POST",
+      headers: { "content-type": "application/json", "x-csrf-token": csrfToken },
+      body: JSON.stringify({}),
+    },
+  );
+  if (response.status !== 200) {
+    throw new RetryError("The retry failed. Reload the queue to see the current state.");
+  }
+  return RetryPayoutResponse.parse(await response.json());
 }

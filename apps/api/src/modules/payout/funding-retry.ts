@@ -3,6 +3,7 @@ import { and, asc, eq, inArray, isNull, lte, or } from "drizzle-orm";
 import type { Chain } from "../../adapters/chain/index.ts";
 import type { PaymentRail } from "../../adapters/payment-rail/index.ts";
 import { recordAuditEvent } from "../audit/index.ts";
+import { createPayoutRetry } from "./payout-retry.ts";
 import { backToDraft, confirmFunding } from "../deals/index.ts";
 
 export const MAX_FUNDING_TRIES = 5;
@@ -36,7 +37,7 @@ interface Claimed {
 }
 
 /**
- * The retry job for Deals in `funding`. Each try sends the charge and the lock again with the
+ * The one retry job. It retries Deals in `funding`, then Payouts in `pending` (`payout-retry.ts`). Each try sends the charge and the lock again with the
  * Deal's stored Idempotency key, so the partners return their first result.
  */
 export function createFundingRetryJob(options: FundingRetryOptions) {
@@ -45,6 +46,7 @@ export function createFundingRetryJob(options: FundingRetryOptions) {
   const intervalMs = options.intervalMs ?? INTERVAL_MS;
   let timer: ReturnType<typeof setInterval> | undefined;
   let running: Promise<void> = Promise.resolve();
+  const payoutRetry = createPayoutRetry({ db, chain, now });
 
   /**
    * Takes a row lock on the Deal, skips it when another try holds it, and leases it by moving its
@@ -150,10 +152,11 @@ export function createFundingRetryJob(options: FundingRetryOptions) {
       const deal = await claim(id);
       if (deal !== undefined) await tryDeal(deal);
     }
+    await payoutRetry.run(filter.dealIds);
   }
 
   const job = {
-    /** One pass over the Deals that are due. */
+    /** One pass over the Deals and the Payouts that are due. */
     runOnce(filter: RunOptions = {}): Promise<void> {
       const pass = running.then(() => run(filter));
       running = pass.catch(() => undefined);
