@@ -110,3 +110,30 @@ describe("fake chain failure script", () => {
     expect((await chain.lock("deal-1", 1, "c")).ok).toBe(true);
   });
 });
+
+describe("fake chain status", () => {
+  it("returns the transaction and amount of a confirmed key, and unknown for any other key", async () => {
+    const chain = createFakeChain();
+    const lock = await chain.lock("deal-1", 500, "key-1");
+    expect(lock.ok).toBe(true);
+    expect(await chain.status("key-1")).toEqual({
+      state: "confirmed",
+      txId: lock.ok ? lock.txId : "",
+      amount: 500,
+    });
+    expect(await chain.status("key-2")).toEqual({ state: "unknown" });
+  });
+
+  it("answers for a key whose reply was lost", async () => {
+    const chain = createFakeChain([{ kind: "lose_reply" }]);
+    await chain.transfer("seller-1", 200, "key-1");
+    expect((await chain.status("key-1")).state).toBe("confirmed");
+  });
+
+  it("takes the next step of the script, like lock and transfer", async () => {
+    const chain = createFakeChain([{ kind: "ok" }, { kind: "fail", failure: "timeout" }]);
+    await chain.lock("deal-1", 500, "key-1");
+    expect(await chain.status("key-1")).toEqual({ state: "failed", failure: "timeout" });
+    expect((await chain.status("key-1")).state).toBe("confirmed");
+  });
+});

@@ -158,3 +158,39 @@ export const payouts = pgTable(
     check("payouts_state_check", sql`${table.state} in ('pending', 'confirmed', 'failed')`),
   ],
 );
+
+/**
+ * A difference between the ledger and the chain for one Idempotency key. A row is open while
+ * `closed_at` is null, and a key has one open row at most.
+ */
+export const mismatches = pgTable(
+  "mismatches",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    kind: text("kind", {
+      enum: ["missing_in_ledger", "missing_on_chain", "amount_differs"],
+    }).notNull(),
+    dealId: uuid("deal_id")
+      .notNull()
+      .references(() => deals.id),
+    /** Null for a deposit. */
+    payoutId: uuid("payout_id").references(() => payouts.id),
+    idempotencyKey: text("idempotency_key").notNull(),
+    chainTxId: text("chain_tx_id").notNull(),
+    ledgerAmountMinor: integer("ledger_amount_minor"),
+    chainAmountMinor: integer("chain_amount_minor"),
+    foundAt: timestamp("found_at", { withTimezone: true }).notNull().defaultNow(),
+    closedAt: timestamp("closed_at", { withTimezone: true }),
+    fixedBy: uuid("fixed_by").references(() => users.id),
+  },
+  (table) => [
+    uniqueIndex("mismatches_one_open_key_idx")
+      .on(table.idempotencyKey)
+      .where(sql`${table.closedAt} is null`),
+    index("mismatches_deal_id_idx").on(table.dealId),
+    check(
+      "mismatches_kind_check",
+      sql`${table.kind} in ('missing_in_ledger', 'missing_on_chain', 'amount_differs')`,
+    ),
+  ],
+);

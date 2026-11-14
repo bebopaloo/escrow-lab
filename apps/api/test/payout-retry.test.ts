@@ -41,6 +41,7 @@ describe("retry a Payout", () => {
     const transferKeys: string[] = [];
     const chain: Chain = {
       lock: (deal, amount, key) => fake.lock(deal, amount, key),
+      status: (key) => fake.status(key),
       transfer: (seller, amount, key) => {
         transferKeys.push(key);
         return fake.transfer(seller, amount, key);
@@ -268,6 +269,7 @@ describe("retry a Payout", () => {
     const auditBefore = await auditActions(dealId);
     const stale: Chain = {
       lock: (deal, amount, key) => t.fake.lock(deal, amount, key),
+      status: (key) => t.fake.status(key),
       transfer: async () => {
         await database.db
           .update(schema.payouts)

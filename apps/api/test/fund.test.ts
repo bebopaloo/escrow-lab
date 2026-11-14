@@ -63,6 +63,7 @@ async function startApp(
       return chain.lock(deal, amount, key);
     },
     transfer: (seller, amount, key) => chain.transfer(seller, amount, key),
+    status: (key) => chain.status(key),
   };
   const app = await buildApp({
     config: testConfig,

@@ -4,6 +4,7 @@ import { createPaymentRail } from "./adapters/payment-rail/index.ts";
 import { buildApp } from "./app.ts";
 import { loadConfig } from "./config.ts";
 import { createFundingRetryJob } from "./modules/payout/index.ts";
+import { createReconciliationJob } from "./modules/reconciliation/index.ts";
 
 const config = loadConfig();
 const database = createDatabase(config.DATABASE_URL);
@@ -19,8 +20,18 @@ const fundingRetry = createFundingRetryJob({
   },
 });
 fundingRetry.start();
+const reconciliation = createReconciliationJob({
+  db: database.db,
+  chain,
+  startedAt: new Date(),
+  onError: (error) => {
+    app.log.error({ err: error }, "reconciliation failed");
+  },
+});
+reconciliation.start();
 app.addHook("onClose", async () => {
   fundingRetry.stop();
+  reconciliation.stop();
   await database.close();
 });
 

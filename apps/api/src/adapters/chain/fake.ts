@@ -18,5 +18,6 @@ export function createFakeChain(script: readonly Step[] = []): FakeChain {
     },
     lock: (deal, amount, key) => core.run(deal, amount, key),
     transfer: (seller, amount, key) => core.run(seller, amount, key),
+    status: (key) => core.status(key),
   };
 }

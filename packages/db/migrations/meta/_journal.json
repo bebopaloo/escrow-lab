@@ -36,6 +36,13 @@
       "when": 1794678415586,
       "tag": "0004_regular_blackheart",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1794694309721,
+      "tag": "0005_bizarre_joseph",
+      "breakpoints": true
     }
   ]
 }
