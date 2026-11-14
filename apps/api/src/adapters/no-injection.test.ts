@@ -10,6 +10,7 @@ describe("production cannot turn on failure injection", () => {
     const config = loadConfig({
       DATABASE_URL: "postgres://user:pass@127.0.0.1:41032/escrow",
       NODE_ENV: "production",
+      SESSION_KEY: "ab".repeat(32),
       CHAIN_SCRIPT: SCRIPT,
       PAYMENT_RAIL_SCRIPT: SCRIPT,
       FAILURE_SCRIPT: SCRIPT,
