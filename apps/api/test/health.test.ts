@@ -18,7 +18,10 @@ describe("GET /api/health", () => {
     const app = await buildApp({ config: testConfig, db: database.db, logger: false });
     const response = await app.inject({ method: "GET", url: "/api/health" });
     expect(response.statusCode).toBe(200);
-    expect(response.json()).toEqual({ status: "ok" });
+    const body = response.json<{ status: string; migrations: number; databaseMs: number }>();
+    expect(body.status).toBe("ok");
+    expect(body.migrations).toBeGreaterThan(0);
+    expect(body.databaseMs).toBeGreaterThanOrEqual(0);
     await app.close();
   });
 
