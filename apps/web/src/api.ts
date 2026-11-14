@@ -3,6 +3,7 @@ import {
   DealResponse,
   ErrorResponse,
   HealthResponse,
+  MilestoneResponse,
   PAYMENT_FAILED,
   SessionResponse,
   UsersResponse,
@@ -110,4 +111,41 @@ export async function fundDeal(id: string, csrfToken: string): Promise<DealRespo
   );
   if (response.status === 402) throw new PaymentFailedError(PAYMENT_FAILED);
   return DealResponse.parse(await readJson(response, 200, "Fund Deal"));
+}
+
+/** The API refused a Milestone action, for example because the state changed. */
+export class MilestoneActionError extends Error {}
+
+async function postMilestoneAction(
+  id: string,
+  action: "evidence" | "accept" | "reject",
+  csrfToken: string,
+  body: object,
+): Promise<MilestoneResponse> {
+  const response = await fetch(
+    new URL(`/api/milestones/${encodeURIComponent(id)}/${action}`, window.location.origin),
+    {
+      method: "POST",
+      headers: { "content-type": "application/json", "x-csrf-token": csrfToken },
+      body: JSON.stringify(body),
+    },
+  );
+  if (response.status !== 200) {
+    throw new MilestoneActionError(
+      "The action failed. Reload this page to see the current state of the Milestone.",
+    );
+  }
+  return MilestoneResponse.parse(await response.json());
+}
+
+export function sendEvidence(id: string, evidenceText: string, csrfToken: string) {
+  return postMilestoneAction(id, "evidence", csrfToken, { evidenceText });
+}
+
+export function acceptEvidence(id: string, csrfToken: string) {
+  return postMilestoneAction(id, "accept", csrfToken, {});
+}
+
+export function rejectEvidence(id: string, reason: string, csrfToken: string) {
+  return postMilestoneAction(id, "reject", csrfToken, { reason });
 }

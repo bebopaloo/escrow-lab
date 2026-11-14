@@ -39,6 +39,8 @@ const DETAIL = {
       title: "Draft",
       amountMinor: 40_000,
       state: "pending",
+      evidenceText: null,
+      rejectionReason: null,
     },
     {
       id: "22222222-2222-4222-8222-222222222222",
@@ -46,6 +48,8 @@ const DETAIL = {
       title: "Final",
       amountMinor: 60_000,
       state: "pending",
+      evidenceText: null,
+      rejectionReason: null,
     },
   ],
 };
@@ -420,5 +424,201 @@ describe("Fund a Deal", () => {
     await openDeal();
     await userEvent.click(screen.getByRole("button", { name: "Fund the Deal" }));
     expect(await screen.findByRole("button", { name: "Fund the Deal" })).toBeDisabled();
+  });
+});
+
+describe("Milestone evidence", () => {
+  const MILESTONE_ID = "22222222-2222-4222-8222-222222222221";
+  const withFirst = (change: Record<string, unknown>) => ({
+    ...DETAIL,
+    state: "funded",
+    milestones: [{ ...DETAIL.milestones[0], ...change }, DETAIL.milestones[1]],
+  });
+
+  async function openDeal() {
+    await userEvent.click(await screen.findByRole("link", { name: /Logo design/ }));
+    await screen.findByRole("heading", { name: "Logo design" });
+  }
+
+  function serve(detail: object) {
+    server.use(http.get(`*/api/deals/${DEAL_ID}`, () => HttpResponse.json(detail)));
+  }
+
+  it("lets the Seller send evidence, then moves focus to the evidence heading", async () => {
+    signedInAs(CAROL);
+    serve(withFirst({ state: "awaiting_evidence" }));
+    let sent: { body: unknown; token: string | null } | undefined;
+    server.use(
+      http.post(`*/api/milestones/${MILESTONE_ID}/evidence`, async ({ request }) => {
+        sent = { body: await request.json(), token: request.headers.get("x-csrf-token") };
+        serve(withFirst({ state: "evidence_sent", evidenceText: "Link" }));
+        return HttpResponse.json({
+          ...DETAIL.milestones[0],
+          state: "evidence_sent",
+          evidenceText: "Link",
+        });
+      }),
+    );
+    renderApp();
+    await openDeal();
+    await userEvent.type(await screen.findByLabelText("Evidence"), "Link");
+    await userEvent.click(screen.getByRole("button", { name: "Send evidence" }));
+    expect(await screen.findByText("The evidence is sent.")).toHaveAttribute("role", "status");
+    expect(sent).toEqual({ token: "token-1", body: { evidenceText: "Link" } });
+    expect(screen.getByRole("heading", { name: "Evidence for Milestone 1" })).toHaveFocus();
+    expect(screen.queryByRole("button", { name: "Send evidence" })).not.toBeInTheDocument();
+  });
+
+  it("shows the Seller the last rejection reason", async () => {
+    signedInAs(CAROL);
+    serve(withFirst({ state: "awaiting_evidence", rejectionReason: "Wrong file" }));
+    renderApp();
+    await openDeal();
+    expect(await screen.findByText("Wrong file")).toBeVisible();
+    expect(screen.getByLabelText("Evidence")).toBeVisible();
+  });
+
+  it("disables Send evidence while the request runs", async () => {
+    signedInAs(CAROL);
+    serve(withFirst({ state: "awaiting_evidence" }));
+    server.use(
+      http.post(`*/api/milestones/${MILESTONE_ID}/evidence`, async () => {
+        await delay("infinite");
+        return HttpResponse.json({});
+      }),
+    );
+    renderApp();
+    await openDeal();
+    await userEvent.type(await screen.findByLabelText("Evidence"), "Link");
+    await userEvent.click(screen.getByRole("button", { name: "Send evidence" }));
+    expect(await screen.findByRole("button", { name: "Send evidence" })).toBeDisabled();
+  });
+
+  it("refuses whitespace-only evidence and links the error to the field", async () => {
+    signedInAs(CAROL);
+    serve(withFirst({ state: "awaiting_evidence" }));
+    let posted = false;
+    server.use(
+      http.post(`*/api/milestones/${MILESTONE_ID}/evidence`, () => {
+        posted = true;
+        return HttpResponse.json({ error: "x", requestId: "r" }, { status: 400 });
+      }),
+    );
+    renderApp();
+    await openDeal();
+    await userEvent.type(await screen.findByLabelText("Evidence"), "   ");
+    await userEvent.click(screen.getByRole("button", { name: "Send evidence" }));
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent("Write the evidence before you send it.");
+    const field = screen.getByLabelText("Evidence");
+    expect(field).toHaveAttribute("aria-invalid", "true");
+    expect(field.getAttribute("aria-describedby")).toContain(alert.id);
+    expect(posted).toBe(false);
+  });
+
+  it("links an API refusal to the evidence field", async () => {
+    signedInAs(CAROL);
+    serve(withFirst({ state: "awaiting_evidence" }));
+    server.use(
+      http.post(`*/api/milestones/${MILESTONE_ID}/evidence`, () =>
+        HttpResponse.json({ error: "x", requestId: "r" }, { status: 409 }),
+      ),
+    );
+    renderApp();
+    await openDeal();
+    await userEvent.type(await screen.findByLabelText("Evidence"), "Link");
+    await userEvent.click(screen.getByRole("button", { name: "Send evidence" }));
+    const alert = await screen.findByRole("alert");
+    const field = screen.getByLabelText("Evidence");
+    expect(field).toHaveAttribute("aria-invalid", "true");
+    expect(field.getAttribute("aria-describedby")).toContain(alert.id);
+  });
+
+  it("does not offer the evidence form to the Buyer", async () => {
+    signedInAs(ALICE);
+    serve(withFirst({ state: "awaiting_evidence" }));
+    renderApp();
+    await openDeal();
+    expect(await screen.findByText("Waiting for the Seller to send evidence.")).toBeVisible();
+    expect(screen.queryByLabelText("Evidence")).not.toBeInTheDocument();
+  });
+
+  it("shows the Seller a waiting message, without Accept or Reject", async () => {
+    signedInAs(CAROL);
+    serve(withFirst({ state: "evidence_sent", evidenceText: "Here is the link" }));
+    renderApp();
+    await openDeal();
+    expect(await screen.findByText("Waiting for the Buyer to review the evidence.")).toBeVisible();
+    expect(screen.queryByRole("button", { name: "Accept the evidence" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Reject the evidence" })).not.toBeInTheDocument();
+  });
+
+  it("lets the Buyer accept the evidence", async () => {
+    signedInAs(ALICE);
+    serve(withFirst({ state: "evidence_sent", evidenceText: "Here is the link" }));
+    let token: string | null = null;
+    server.use(
+      http.post(`*/api/milestones/${MILESTONE_ID}/accept`, ({ request }) => {
+        token = request.headers.get("x-csrf-token");
+        serve(withFirst({ state: "accepted", evidenceText: "Here is the link" }));
+        return HttpResponse.json({ ...DETAIL.milestones[0], state: "accepted" });
+      }),
+    );
+    renderApp();
+    await openDeal();
+    expect(await screen.findByText("Here is the link")).toBeVisible();
+    await userEvent.click(screen.getByRole("button", { name: "Accept the evidence" }));
+    expect(await screen.findByText("The evidence is accepted.")).toHaveAttribute("role", "status");
+    expect(token).toBe("token-1");
+    expect(screen.getByRole("heading", { name: "Evidence for Milestone 1" })).toHaveFocus();
+  });
+
+  it("lets the Buyer reject the evidence with a reason", async () => {
+    signedInAs(ALICE);
+    serve(withFirst({ state: "evidence_sent", evidenceText: "Here is the link" }));
+    let body: unknown;
+    server.use(
+      http.post(`*/api/milestones/${MILESTONE_ID}/reject`, async ({ request }) => {
+        body = await request.json();
+        serve(withFirst({ state: "awaiting_evidence", rejectionReason: "Wrong file" }));
+        return HttpResponse.json({ ...DETAIL.milestones[0], state: "awaiting_evidence" });
+      }),
+    );
+    renderApp();
+    await openDeal();
+    await userEvent.type(await screen.findByLabelText("Reason for rejection"), "Wrong file");
+    await userEvent.click(screen.getByRole("button", { name: "Reject the evidence" }));
+    expect(await screen.findByText("The evidence is rejected.")).toHaveAttribute("role", "status");
+    expect(body).toEqual({ reason: "Wrong file" });
+    expect(screen.getByRole("heading", { name: "Evidence for Milestone 1" })).toHaveFocus();
+  });
+
+  it("asks for a reason before it rejects, and links the error to the field", async () => {
+    signedInAs(ALICE);
+    serve(withFirst({ state: "evidence_sent", evidenceText: "Here is the link" }));
+    renderApp();
+    await openDeal();
+    await userEvent.click(await screen.findByRole("button", { name: "Reject the evidence" }));
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent("Give a reason for the rejection.");
+    const field = screen.getByLabelText("Reason for rejection");
+    expect(field).toHaveAttribute("aria-invalid", "true");
+    expect(field.getAttribute("aria-describedby")).toContain(alert.id);
+  });
+
+  it("disables Accept and Reject while a request runs", async () => {
+    signedInAs(ALICE);
+    serve(withFirst({ state: "evidence_sent", evidenceText: "Here is the link" }));
+    server.use(
+      http.post(`*/api/milestones/${MILESTONE_ID}/accept`, async () => {
+        await delay("infinite");
+        return HttpResponse.json({});
+      }),
+    );
+    renderApp();
+    await openDeal();
+    await userEvent.click(await screen.findByRole("button", { name: "Accept the evidence" }));
+    expect(await screen.findByRole("button", { name: "Accept the evidence" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Reject the evidence" })).toBeDisabled();
   });
 });
