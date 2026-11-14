@@ -1,6 +1,6 @@
 import { schema, type Database } from "@escrow-lab/db";
 import type { MilestoneResponse } from "@escrow-lab/shared";
-import { asc, eq } from "drizzle-orm";
+import { and, asc, eq } from "drizzle-orm";
 
 export interface NewMilestone {
   title: string;
@@ -47,4 +47,15 @@ export async function listMilestones(db: Database, dealId: string): Promise<Mile
     .from(schema.milestones)
     .where(eq(schema.milestones.dealId, dealId))
     .orderBy(asc(schema.milestones.position));
+}
+
+/** Opens the first Milestone of a funded Deal: `pending` becomes `awaiting_evidence`. */
+export async function openFirstMilestone(
+  db: Pick<Database, "update">,
+  dealId: string,
+): Promise<void> {
+  await db
+    .update(schema.milestones)
+    .set({ state: "awaiting_evidence" })
+    .where(and(eq(schema.milestones.dealId, dealId), eq(schema.milestones.position, 1)));
 }

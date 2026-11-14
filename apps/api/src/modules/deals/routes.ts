@@ -7,20 +7,32 @@ import {
   ErrorResponse,
   ListDealsQuery,
   MILESTONES_MUST_ADD_UP,
+  PAYMENT_FAILED,
   SELLER_MUST_BE_SELLER,
+  WRONG_DEAL_STATE,
 } from "@escrow-lab/shared";
 import type { preHandlerHookHandler } from "fastify";
 import type { FastifyPluginCallbackZod } from "fastify-type-provider-zod";
+import type { Chain } from "../../adapters/chain/index.ts";
+import type { PaymentRail } from "../../adapters/payment-rail/index.ts";
 import { requireRole } from "../identity/index.ts";
+import { fundDeal } from "./fund.ts";
 import { createDeal, findDeal, isSeller, listDeals } from "./store.ts";
 
 const CREATE_DEAL_LIMIT = 30;
+const FUND_DEAL_LIMIT = 30;
 
 export interface DealsOptions {
   db: Database;
+  chain: Chain;
+  paymentRail: PaymentRail;
 }
 
-export const dealRoutes: FastifyPluginCallbackZod<DealsOptions> = (app, { db }, done) => {
+export const dealRoutes: FastifyPluginCallbackZod<DealsOptions> = (
+  app,
+  { db, chain, paymentRail },
+  done,
+) => {
   const csrf: preHandlerHookHandler = (request, reply, next) => {
     app.csrfProtection(request, reply, next);
   };
@@ -79,6 +91,39 @@ export const dealRoutes: FastifyPluginCallbackZod<DealsOptions> = (app, { db }, 
       const deal = await findDeal(db, buyerId, dealId);
       if (deal === undefined) throw new Error("The new Deal cannot be read");
       return reply.status(201).send(deal);
+    },
+  );
+
+  app.post(
+    "/deals/:id/fund",
+    {
+      config: { rateLimit: { max: FUND_DEAL_LIMIT, timeWindow: "1 minute" } },
+      onRequest: [requireRole(db, "buyer"), csrf],
+      schema: {
+        params: DealIdParams,
+        response: {
+          200: DealResponse,
+          402: ErrorResponse,
+          404: ErrorResponse,
+          409: ErrorResponse,
+        },
+      },
+    },
+    async (request, reply) => {
+      const buyerId = request.user?.id ?? "";
+      const outcome = await fundDeal(db, { chain, paymentRail }, buyerId, request.params.id);
+      if (outcome.kind === "not_found") {
+        return reply.status(404).send({ error: "Not found", requestId: request.id });
+      }
+      if (outcome.kind === "wrong_state") {
+        return reply.status(409).send({ error: WRONG_DEAL_STATE, requestId: request.id });
+      }
+      if (outcome.kind === "refused") {
+        return reply.status(402).send({ error: PAYMENT_FAILED, requestId: request.id });
+      }
+      const deal = await findDeal(db, buyerId, request.params.id);
+      if (deal === undefined) throw new Error("The funded Deal cannot be read");
+      return deal;
     },
   );
   done();

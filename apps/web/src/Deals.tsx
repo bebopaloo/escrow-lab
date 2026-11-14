@@ -7,11 +7,12 @@ type View = { name: "list" } | { name: "create" } | { name: "detail"; id: string
 
 export interface DealsProps {
   role: "buyer" | "seller";
+  userId: string;
   csrfToken: string;
 }
 
 /** The Deal pages of a Buyer or a Seller. The state holds the page that shows. */
-export function Deals({ role, csrfToken }: DealsProps) {
+export function Deals({ role, userId, csrfToken }: DealsProps) {
   const [view, setView] = useState<View>({ name: "list" });
   const container = useRef<HTMLDivElement>(null);
   const shown = useRef(view.name);
@@ -50,7 +51,15 @@ export function Deals({ role, csrfToken }: DealsProps) {
           }}
         />
       )}
-      {view.name === "detail" && <DealDetail id={view.id} onBack={toList} />}
+      {view.name === "detail" && (
+        <DealDetail
+          id={view.id}
+          userId={userId}
+          role={role}
+          csrfToken={csrfToken}
+          onBack={toList}
+        />
+      )}
     </div>
   );
 }

@@ -50,7 +50,11 @@ export function App() {
           {session.data.user.role === "approver" ? (
             <ApprovalQueue />
           ) : (
-            <Deals role={session.data.user.role} csrfToken={session.data.csrfToken} />
+            <Deals
+              role={session.data.user.role}
+              userId={session.data.user.id}
+              csrfToken={session.data.csrfToken}
+            />
           )}
           <SignOut csrfToken={session.data.csrfToken} />
         </>

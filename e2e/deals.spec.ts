@@ -47,3 +47,28 @@ test("a Buyer creates a Deal and the Seller sees it", async ({ page }) => {
   await expect(page.getByRole("heading", { name: "Deals" })).toBeVisible();
   await expect(page.getByRole("link", { name: title })).toHaveCount(0);
 });
+
+test("a Buyer funds a Deal and the first Milestone opens", async ({ page }) => {
+  const title = `Fund me ${Date.now().toString()}`;
+  await page.goto("/");
+  await page.getByRole("button", { name: /Bob Buyer/ }).click();
+  await page.getByRole("button", { name: "Create a Deal" }).click();
+  await page.getByLabel("Seller").selectOption({ label: "Carol Seller" });
+  await page.getByLabel("Deal title").fill(title);
+  await page.getByLabel("Total (£)").fill("1000");
+  await page.getByLabel("Milestone 1 title").fill("Draft");
+  await page.getByLabel("Milestone 1 amount (£)").fill("400");
+  await page.getByRole("button", { name: "Add a Milestone" }).click();
+  await page.getByLabel("Milestone 2 title").fill("Final");
+  await page.getByLabel("Milestone 2 amount (£)").fill("600");
+  await page.getByRole("button", { name: "Create the Deal" }).click();
+  await expect(page.getByRole("heading", { name: title })).toBeFocused();
+
+  await page.getByRole("button", { name: "Fund the Deal" }).click();
+  await expect(page.getByText("The Deal is funded.")).toBeVisible();
+  await expect(page.getByRole("heading", { name: title })).toBeFocused();
+  await expect(page.getByRole("button", { name: "Fund the Deal" })).toHaveCount(0);
+  await expect(page.getByRole("row", { name: /Draft.*awaiting evidence/ })).toBeVisible();
+  const results = await new AxeBuilder({ page }).withTags(WCAG_22_AA).analyze();
+  expect(results.violations).toEqual([]);
+});

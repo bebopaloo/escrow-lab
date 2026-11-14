@@ -1,1 +1,6 @@
-export { insertMilestones, listMilestones, type NewMilestone } from "./store.ts";
+export {
+  insertMilestones,
+  listMilestones,
+  openFirstMilestone,
+  type NewMilestone,
+} from "./store.ts";

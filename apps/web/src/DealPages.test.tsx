@@ -321,3 +321,104 @@ describe("Create Deal", () => {
     expect(amount.getAttribute("aria-describedby")).not.toContain(alert.id);
   });
 });
+
+describe("Fund a Deal", () => {
+  async function openDeal() {
+    await userEvent.click(await screen.findByRole("link", { name: /Logo design/ }));
+    await screen.findByRole("heading", { name: "Logo design" });
+  }
+  const FUNDED = {
+    ...DETAIL,
+    state: "funded",
+    milestones: [{ ...DETAIL.milestones[0], state: "awaiting_evidence" }, DETAIL.milestones[1]],
+  };
+
+  it("offers Fund to the Buyer of a draft Deal only", async () => {
+    signedInAs(ALICE);
+    renderApp();
+    await openDeal();
+    expect(screen.getByRole("button", { name: "Fund the Deal" })).toBeVisible();
+  });
+
+  it("does not offer Fund to the Seller", async () => {
+    signedInAs(CAROL);
+    renderApp();
+    await openDeal();
+    expect(screen.queryByRole("button", { name: "Fund the Deal" })).not.toBeInTheDocument();
+  });
+
+  it("does not offer Fund for a Deal that is not in draft", async () => {
+    signedInAs(ALICE);
+    server.use(http.get(`*/api/deals/${DEAL_ID}`, () => HttpResponse.json(FUNDED)));
+    renderApp();
+    await openDeal();
+    expect(screen.queryByRole("button", { name: "Fund the Deal" })).not.toBeInTheDocument();
+  });
+
+  it("sends the CSRF token, shows the funded Deal and moves focus to the heading", async () => {
+    signedInAs(ALICE);
+    let token: string | null = null;
+    server.use(
+      http.post(`*/api/deals/${DEAL_ID}/fund`, ({ request }) => {
+        token = request.headers.get("x-csrf-token");
+        server.use(http.get(`*/api/deals/${DEAL_ID}`, () => HttpResponse.json(FUNDED)));
+        return HttpResponse.json(FUNDED);
+      }),
+    );
+    renderApp();
+    await openDeal();
+    await userEvent.click(screen.getByRole("button", { name: "Fund the Deal" }));
+    expect(await screen.findByText("The Deal is funded.")).toHaveAttribute("role", "status");
+    expect(token).toBe("token-1");
+    expect(screen.getByRole("heading", { name: "Logo design" })).toHaveFocus();
+    expect(screen.queryByRole("button", { name: "Fund the Deal" })).not.toBeInTheDocument();
+  });
+
+  it("shows that the payment failed and keeps focus on the button", async () => {
+    signedInAs(ALICE);
+    server.use(
+      http.post(`*/api/deals/${DEAL_ID}/fund`, () =>
+        HttpResponse.json(
+          { error: "The payment failed. Try again.", requestId: "r" },
+          { status: 402 },
+        ),
+      ),
+    );
+    renderApp();
+    await openDeal();
+    await userEvent.click(screen.getByRole("button", { name: "Fund the Deal" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("The payment failed. Try again.");
+    const button = screen.getByRole("button", { name: "Fund the Deal" });
+    expect(button).toBeEnabled();
+    expect(button).toHaveFocus();
+  });
+
+  it("tells the Buyer when the payment is still in progress", async () => {
+    signedInAs(ALICE);
+    const FUNDING = { ...DETAIL, state: "funding" };
+    server.use(
+      http.post(`*/api/deals/${DEAL_ID}/fund`, () => {
+        server.use(http.get(`*/api/deals/${DEAL_ID}`, () => HttpResponse.json(FUNDING)));
+        return HttpResponse.json(FUNDING);
+      }),
+    );
+    renderApp();
+    await openDeal();
+    await userEvent.click(screen.getByRole("button", { name: "Fund the Deal" }));
+    expect(await screen.findByText(/payment is in progress/)).toHaveAttribute("role", "status");
+  });
+
+  it("disables the button while the request runs", async () => {
+    signedInAs(ALICE);
+    server.use(
+      http.post(`*/api/deals/${DEAL_ID}/fund`, async () => {
+        await delay("infinite");
+        return HttpResponse.json(FUNDED);
+      }),
+    );
+    renderApp();
+    await openDeal();
+    await userEvent.click(screen.getByRole("button", { name: "Fund the Deal" }));
+    expect(await screen.findByRole("button", { name: "Fund the Deal" })).toBeDisabled();
+  });
+});
