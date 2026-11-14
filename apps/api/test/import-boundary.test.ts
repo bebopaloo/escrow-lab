@@ -101,6 +101,19 @@ describe("scripted fake factories", () => {
     expect(await restrictedMessages(code, "apps/api/test/x.ts")).toBe(0);
   });
 
+  it.each(cases)(
+    "rejects %s from a sibling production file in its adapter",
+    async (name, adapter) => {
+      const code = `import { ${name} } from "./fake.ts";\n`;
+      expect(await restrictedMessages(code, `apps/api/src/adapters/${adapter}/sibling.ts`)).toBe(1);
+    },
+  );
+
+  it.each(cases)("allows %s in its own adapter index.ts", async (name, adapter) => {
+    const code = `import { ${name} } from "./fake.ts";\nexport { ${name} } from "./fake.ts";\n`;
+    expect(await restrictedMessages(code, `apps/api/src/adapters/${adapter}/index.ts`)).toBe(0);
+  });
+
   it("allows the production factories in a production file", async () => {
     const code =
       'import { createChain } from "../../adapters/chain/index.ts";\n' +

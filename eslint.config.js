@@ -48,12 +48,18 @@ export default defineConfig(
         {
           patterns: [
             {
-              group: ["**/chain", "**/chain/index.ts", "**/chain/fake.ts"],
+              group: ["**/chain", "**/chain/index.ts", "**/chain/fake.ts", "./fake.ts", "./fake"],
               importNames: ["createFakeChain"],
               message: "Only test code can import createFakeChain.",
             },
             {
-              group: ["**/payment-rail", "**/payment-rail/index.ts", "**/payment-rail/fake.ts"],
+              group: [
+                "**/payment-rail",
+                "**/payment-rail/index.ts",
+                "**/payment-rail/fake.ts",
+                "./fake.ts",
+                "./fake",
+              ],
               importNames: ["createFakePaymentRail"],
               message: "Only test code can import createFakePaymentRail.",
             },
@@ -71,6 +77,11 @@ export default defineConfig(
     // The two fakes build on the shared core.
     files: ["apps/api/src/adapters/chain/fake.ts", "apps/api/src/adapters/payment-rail/fake.ts"],
     rules: { "no-restricted-imports": "off", "boundary/no-dynamic-fake-import": "off" },
+  },
+  {
+    // Each adapter's index.ts re-exports its scripted fake for test code.
+    files: ["apps/api/src/adapters/chain/index.ts", "apps/api/src/adapters/payment-rail/index.ts"],
+    rules: { "no-restricted-imports": "off" },
   },
   {
     files: ["**/*.js"],
