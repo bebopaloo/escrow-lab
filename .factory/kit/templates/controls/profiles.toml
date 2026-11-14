@@ -1,0 +1,116 @@
+# Control modules, settings and Control profiles (ADR 0014).
+#
+# factory_config.py is the only reader of this file. A repo turns modules on in
+# the `controls` key of .claude/factory.json; every module is off by default.
+# A profile is only a starting set: the repo config always holds the full list.
+#
+# The order of the modules here is the order in every output.
+
+[modules.risk_tiers]
+summary = "Give each pull request a Risk tier (authority, sensitive, general, inert) from the paths it changes, with built-in floors."
+needs = []
+
+[modules.security_criteria]
+summary = "The Security review pass cites OWASP ASVS, CWE and other standard IDs, and the repo's Controls and threats."
+needs = []
+
+[modules.scanners]
+summary = "Deterministic security scanners in CI: SAST, dependency, secret and configuration scans."
+needs = []
+
+[modules.security_section]
+summary = "Each authority and sensitive pull request has a checked Security section."
+needs = ["risk_tiers"]
+
+[modules.dependency_control]
+summary = "Each new direct dependency is named, with a reason, in the Security section."
+needs = ["security_section"]
+
+[modules.waivers]
+summary = "Time-limited, recorded acceptances of risk that only a person writes."
+needs = []
+
+[modules.finding_lifecycle]
+summary = "Findings that survive a merge, and audit and pen-test findings, become tracker issues with due dates."
+needs = []
+
+[modules.control_register]
+summary = "The Control register with tagged tests and a traceability matrix."
+needs = []
+
+[modules.threat_model]
+summary = "The Threat model, linked to the Control register; a new trust boundary needs a Threat model change."
+needs = ["risk_tiers", "control_register"]
+
+[modules.release_approval]
+summary = "A release pull request with a change at or above the threshold tier merges into production only after the Operator's Release approval on its current head commit."
+needs = ["risk_tiers"]
+
+[modules.traceability]
+summary = "Each pull request links to an issue, and the issue to an approved Spec or a spec waiver."
+needs = []
+
+[modules.release_record]
+summary = "A Release record, an SBOM and signatures for each version tag."
+needs = ["traceability"]
+
+[modules.infrastructure]
+summary = "Infrastructure changes only through Terraform pull requests, with scans and drift detection."
+needs = ["risk_tiers"]
+
+[modules.control_events]
+summary = "The factory writes Control events, and Foreman shows the control metrics."
+needs = []
+
+# Settings. `kind` is one of: integer (with min and max), text, tier (one Risk
+# tier word), tier_levels (a table of Risk tier words and default, each value
+# from min to max).
+
+[settings.asvs_level]
+module = "security_criteria"
+kind = "tier_levels"
+min = 1
+max = 3
+default = { authority = 3, default = 2 }
+
+[settings.waiver_max_days]
+module = "waivers"
+kind = "integer"
+min = 1
+max = 365
+default = 90
+
+[settings.finding_due_days]
+module = "finding_lifecycle"
+kind = "integer"
+min = 1
+max = 365
+default = 30
+
+[settings.release_approval_text]
+module = "release_approval"
+kind = "text"
+default = "Release approved: I have read the diff, the release summary and the Security sections."
+
+[settings.release_approval_threshold]
+module = "release_approval"
+kind = "tier"
+default = "sensitive"
+
+# Profiles. `infrastructure` is in no profile: add it when the repo has Terraform.
+
+[profiles.none]
+summary = "No controls. The factory works as before."
+modules = []
+
+[profiles.standard]
+summary = "Security basics for any product: risk tiers, standard criteria, scanners, the Security section and dependency control."
+modules = ["risk_tiers", "security_criteria", "scanners", "security_section", "dependency_control", "control_events"]
+
+[profiles.regulated]
+summary = "Evidence for auditors and a regulator: everything in standard, plus the Control register, the Threat model, Waivers, Release approval, traceability and the Release record."
+modules = [
+  "risk_tiers", "security_criteria", "scanners", "security_section", "dependency_control", "waivers",
+  "finding_lifecycle", "control_register", "threat_model", "release_approval", "traceability", "release_record",
+  "control_events",
+]

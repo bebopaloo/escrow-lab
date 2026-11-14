@@ -1,0 +1,70 @@
+# Release approval (ADR 0014 and 0015): the `release-approval` check on each release
+# pull request into `production`. Branch protection on `production` requires it (R7.2).
+# It passes when the Release is below the `release_approval_threshold` tier, or when the
+# Operator's valid Release approval is on the head commit. A new push or a later
+# change request makes it fail again. context-init writes this file to
+# .github/workflows/release-approval.yml and copies the scripts into .factory/kit/.
+name: Release approval
+
+on:
+  pull_request:
+    branches: [production]
+    types: [opened, synchronize, reopened, labeled]
+  pull_request_review:
+    types: [submitted, edited, dismissed]
+
+permissions:
+  contents: read
+  pull-requests: read
+
+concurrency:
+  group: release-approval-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  release-approval:
+    if: github.event.pull_request.base.ref == 'production'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      # Text from the pull request reaches the scripts only through env, never inside `run`.
+      # The tier uses the release pull request's own `risk:*` labels; prepare-release puts
+      # the highest label of the Release's pull requests on it.
+      - name: Risk tier of the Release
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          LABELS: ${{ toJson(github.event.pull_request.labels.*.name) }}
+        run: |
+          set -- $(printf '%s' "$LABELS" | jq -r '.[] | select(startswith("risk:")) | ltrimstr("risk:") | "--label-tier \(.)"')
+          python3 .factory/kit/scripts/release_plan.py tier --repo . --base "$BASE_SHA" --head "$HEAD_SHA" "$@" > tier.json
+          cat tier.json
+      - name: Reviews of the release pull request
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          gh api "repos/$REPO/pulls/$NUMBER/reviews" --paginate | jq -s 'add // [] | map({
+            author: (if .user.type == "Bot" and (.user.login | endswith("[bot]") | not) then .user.login + "[bot]" else .user.login end),
+            state: (.state | ascii_downcase),
+            commit: (.commit_id // ""),
+            body: (.body // ""),
+            time: (.submitted_at // "")
+          })' > reviews.json
+      - name: Release approval
+        env:
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          python3 .factory/kit/scripts/release_approval.py check --repo . --reviews reviews.json --head-sha "$HEAD_SHA" --tier-file tier.json > approval.json || status=$?
+          cat approval.json
+          {
+            echo "### Release approval"
+            jq -r '"- Tier: \(.tier // "off"), threshold: \(.threshold // "off"), required: \(.required // false), approved: \(.approved // true)"' approval.json
+            jq -r '(.reasons // [])[] | "- \(.)"' approval.json
+          } >> "$GITHUB_STEP_SUMMARY"
+          exit "${status:-0}"

@@ -1,0 +1,45 @@
+# Control register (ADR 0014, module control_register).
+#
+# Each [[control]] is one requirement that the product must meet, with the
+# modules that implement it and the evidence that proves it. A Control needs at
+# least one tagged test or one manual check. `controls.py validate` checks it,
+# and `controls.py matrix` builds the traceability matrix from JUnit reports.
+#
+# A test carries a Control ID in its name:
+#   TypeScript: it("[CTRL-PAY-03] refuses a release without approval", ...)
+#   Python:     def test_ctrl_pay_03_refuses_a_release_without_approval():
+#
+# Keys: id (CTRL-<AREA>-<n>), title, owner, modules (path globs), and the
+# optional sources (regulations, ADRs) and manual_checks.
+#
+# `tests` lists the globs of the test files to scan. Leave it out to use the
+# defaults: *.test.ts(x), *.spec.ts(x), test_*.py, *_test.py, *_test.go.
+#
+# Example (remove the comment marks and edit):
+#
+# [[control]]
+# id = "CTRL-PAY-03"
+# title = "A release needs the buyer's recorded approval"
+# sources = ["PSRs 2017 reg 67"]
+# owner = "Operator"
+# modules = ["packages/payments/**"]
+#
+# [[control]]
+# id = "CTRL-REL-01"
+# title = "Code that no human reviewed never reaches production, client data or real money"
+# sources = ["ADR 0015"]
+# owner = "Operator"
+# modules = [".github/workflows/**"]
+# manual_checks = [
+#   "The release-separation check passes on every pull request into the main branch",
+#   "The production environment deploys only from the production branch, and holds the only production secrets",
+#   "Production and dev run in separate cloud accounts; the dev account holds only test-mode keys and synthetic data",
+# ]
+#
+# [[control]]
+# id = "CTRL-OPS-01"
+# title = "Backups restore within four hours"
+# sources = ["FCA SYSC 15A"]
+# owner = "Operator"
+# modules = ["infra/**"]
+# manual_checks = ["Quarterly restore rehearsal, recorded in the operations log"]

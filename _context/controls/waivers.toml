@@ -1,0 +1,32 @@
+# Waiver register (ADR 0014, module waivers). Only a person changes this file:
+# the factory guard and the deny rules stop the factory from writing it.
+#
+# Each [[waiver]] accepts one risk for a limited time. It needs an id
+# (WAIVER-<n>, never reused), the reason, the risk that stays, the owner, the
+# person who approved it (approved_by), and the dates created and expires.
+# expires must come no more than `waiver_max_days` days after created (default
+# 90). `waivers.py check` fails on an expired Waiver, so CI makes you decide
+# again before the date passes.
+#
+# [waiver.covers] says what the Waiver covers:
+#   kind = "finding"  file, category and an optional ref (for example CWE-770):
+#                     the Machine gate then lets a matching review finding pass
+#   kind = "check"    name: a CI check, such as trivy
+#   kind = "control"  id: a Control that is not met yet, such as CTRL-PAY-03
+#
+# Example (remove the comment marks and edit):
+#
+# [[waiver]]
+# id = "WAIVER-1"
+# reason = "The provider SDK has no fix yet"
+# risk = "A crafted webhook could slow the API"
+# owner = "Operator"
+# approved_by = "<forge login>"
+# created = 2026-11-14
+# expires = 2027-01-31
+#
+# [waiver.covers]
+# kind = "finding"
+# file = "packages/payments/webhook.ts"
+# category = "Security"
+# ref = "CWE-770"
