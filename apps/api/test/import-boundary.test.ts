@@ -103,7 +103,22 @@ describe("scripted fake factories", () => {
 
   it("allows the production factories in a production file", async () => {
     const code =
-      'import { createChain, createPaymentRail } from "../../adapters/chain/index.ts";\n';
+      'import { createChain } from "../../adapters/chain/index.ts";\n' +
+      'import { createPaymentRail } from "../../adapters/payment-rail/index.ts";\n';
     expect(await restrictedMessages(code, "apps/api/src/modules/deals/service.ts")).toBe(0);
+  });
+
+  it("rejects createFakeCore in a production file", async () => {
+    const code = 'import { createFakeCore } from "../../adapters/fake-core.ts";\n';
+    expect(await restrictedMessages(code, "apps/api/src/modules/deals/service.ts")).toBe(1);
+    expect(await restrictedMessages(code, "apps/api/src/app.ts")).toBe(1);
+  });
+
+  it("allows createFakeCore in the two fakes and in test code", async () => {
+    const fake = 'import { createFakeCore } from "../fake-core.ts";\n';
+    expect(await restrictedMessages(fake, "apps/api/src/adapters/chain/fake.ts")).toBe(0);
+    expect(await restrictedMessages(fake, "apps/api/src/adapters/payment-rail/fake.ts")).toBe(0);
+    const code = 'import { createFakeCore } from "../../adapters/fake-core.ts";\n';
+    expect(await restrictedMessages(code, "apps/api/src/modules/deals/service.test.ts")).toBe(0);
   });
 });

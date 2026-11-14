@@ -55,10 +55,20 @@ export default defineConfig(
               importNames: ["createFakePaymentRail"],
               message: "Only test code can import createFakePaymentRail.",
             },
+            {
+              group: ["**/fake-core", "**/fake-core.ts"],
+              importNames: ["createFakeCore"],
+              message: "Only the two fake adapters and test code can import createFakeCore.",
+            },
           ],
         },
       ],
     },
+  },
+  {
+    // The two fakes build on the shared core.
+    files: ["apps/api/src/adapters/chain/fake.ts", "apps/api/src/adapters/payment-rail/fake.ts"],
+    rules: { "no-restricted-imports": "off" },
   },
   {
     files: ["**/*.js"],
