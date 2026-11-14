@@ -37,6 +37,53 @@ export default defineConfig(
     rules: { "boundary/import-boundary": "error" },
   },
   {
+    // Only test code can import a fake with a failure script.
+    files: ["apps/api/src/**/*.ts"],
+    ignores: ["**/*.test.ts"],
+    plugins: { boundary },
+    rules: {
+      "boundary/no-dynamic-fake-import": "error",
+      "no-restricted-imports": [
+        "error",
+        {
+          patterns: [
+            {
+              group: ["**/chain", "**/chain/index.ts", "**/chain/fake.ts", "./fake.ts", "./fake"],
+              importNames: ["createFakeChain"],
+              message: "Only test code can import createFakeChain.",
+            },
+            {
+              group: [
+                "**/payment-rail",
+                "**/payment-rail/index.ts",
+                "**/payment-rail/fake.ts",
+                "./fake.ts",
+                "./fake",
+              ],
+              importNames: ["createFakePaymentRail"],
+              message: "Only test code can import createFakePaymentRail.",
+            },
+            {
+              group: ["**/fake-core", "**/fake-core.ts"],
+              importNames: ["createFakeCore"],
+              message: "Only the two fake adapters and test code can import createFakeCore.",
+            },
+          ],
+        },
+      ],
+    },
+  },
+  {
+    // The two fakes build on the shared core.
+    files: ["apps/api/src/adapters/chain/fake.ts", "apps/api/src/adapters/payment-rail/fake.ts"],
+    rules: { "no-restricted-imports": "off", "boundary/no-dynamic-fake-import": "off" },
+  },
+  {
+    // Each adapter's index.ts re-exports its scripted fake for test code.
+    files: ["apps/api/src/adapters/chain/index.ts", "apps/api/src/adapters/payment-rail/index.ts"],
+    rules: { "no-restricted-imports": "off" },
+  },
+  {
     files: ["**/*.js"],
     extends: [tseslint.configs.disableTypeChecked],
   },

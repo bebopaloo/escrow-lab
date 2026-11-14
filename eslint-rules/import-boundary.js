@@ -12,8 +12,51 @@ function locate(path, srcRoot) {
   return { area, name, rest: rest.join("/") };
 }
 
+const stripExt = (path) => path.replace(/\.[cm]?[jt]s$/, "");
+
+/** True when a path is an adapter index.ts, an adapter fake.ts or adapters/fake-core.ts. */
+function isFakeEntry(path, srcRoot) {
+  const parts = relative(srcRoot, path).split(sep);
+  if (parts[0] !== "adapters") return false;
+  if (parts.length === 2) return stripExt(parts[1]) === "fake-core";
+  if (parts.length === 3) return ["index", "fake", ""].includes(stripExt(parts[2]));
+  return false;
+}
+
 export default {
   rules: {
+    "no-dynamic-fake-import": {
+      meta: { type: "problem", schema: [] },
+      create(context) {
+        const file = context.filename;
+        const srcRoot = resolve(context.cwd, "apps/api/src");
+        return {
+          ImportExpression: (node) => {
+            const source = node.source;
+            let specifier = null;
+            if (source.type === "Literal" && typeof source.value === "string") {
+              specifier = source.value;
+            } else if (source.type === "TemplateLiteral" && source.expressions.length === 0) {
+              specifier = source.quasis[0]?.value.cooked ?? null;
+            }
+            if (specifier === null) {
+              context.report({
+                node,
+                message: "A dynamic import needs a literal source, so a lint rule can check it.",
+              });
+              return;
+            }
+            if (!specifier.startsWith(".")) return;
+            if (isFakeEntry(resolve(dirname(file), specifier), srcRoot)) {
+              context.report({
+                node,
+                message: "Only test code can dynamically import an adapter or a fake.",
+              });
+            }
+          },
+        };
+      },
+    },
     "import-boundary": {
       meta: { type: "problem", schema: [] },
       create(context) {
