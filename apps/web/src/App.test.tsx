@@ -96,6 +96,9 @@ describe("App", () => {
 
   it("shows the approval queue, and not the Deal list, to an Approver", async () => {
     server.use(
+      http.get("*/api/approvals", () =>
+        HttpResponse.json({ items: [], total: 0, limit: 100, offset: 0 }),
+      ),
       http.get("*/api/health", () => HttpResponse.json({ status: "ok" })),
       http.get("*/api/session", () => HttpResponse.json({ user: USERS[2], csrfToken: "token-1" })),
     );

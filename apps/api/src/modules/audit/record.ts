@@ -20,8 +20,11 @@ export interface AuditEvent {
   dealId?: string;
 }
 
-/** Appends one audit event. The table refuses UPDATE and DELETE. */
-export async function recordAuditEvent(db: Database, event: AuditEvent): Promise<void> {
+/** Appends one audit event. The table refuses UPDATE and DELETE. Pass a transaction to write it with other rows. */
+export async function recordAuditEvent(
+  db: Pick<Database, "insert">,
+  event: AuditEvent,
+): Promise<void> {
   await db.insert(schema.auditEvents).values({
     userId: event.userId,
     action: event.action,
