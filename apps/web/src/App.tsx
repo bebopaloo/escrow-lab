@@ -41,6 +41,7 @@ export function App() {
     <main>
       <h1>escrow-lab</h1>
       <p role="status">{message}</p>
+      {session.isPending && <p role="status">Loading the session.</p>}
       {session.isError && <p role="alert">The session cannot be read. Reload this page.</p>}
       {session.data?.user === null && <SignIn csrfToken={session.data.csrfToken} />}
       {session.data?.user && (

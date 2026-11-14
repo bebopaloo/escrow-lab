@@ -107,6 +107,71 @@ describe("sessions", () => {
     });
   });
 
+  describe("session limits", () => {
+    const MINUTE = 60 * 1000;
+
+    async function signedInCookie(app: TestApp) {
+      const { response } = await signInAs(app, SEED_USERS[0]?.id ?? "");
+      return cookieHeader(response);
+    }
+
+    function readUser(app: TestApp, cookie: string) {
+      return app
+        .inject({ method: "GET", url: "/api/session", headers: { cookie } })
+        .then((response) => ({
+          response,
+          user: SessionResponse.parse(response.json()).user,
+        }));
+    }
+
+    it("refuses a session idle for more than 30 minutes", async () => {
+      const app = await makeApp();
+      const cookie = await signedInCookie(app);
+      vi.useFakeTimers({ toFake: ["Date"], now: Date.now() + 31 * MINUTE });
+      expect((await readUser(app, cookie)).user).toBeNull();
+      await app.close();
+    });
+
+    it("keeps a session that is used often, up to 8 hours after sign-in", async () => {
+      const app = await makeApp();
+      let cookie = await signedInCookie(app);
+      const start = Date.now();
+      // A visit every 20 minutes keeps the session alive.
+      for (let step = 1; step <= 6; step += 1) {
+        vi.useFakeTimers({ toFake: ["Date"], now: start + step * 20 * MINUTE });
+        const { response, user } = await readUser(app, cookie);
+        expect(user).not.toBeNull();
+        const next = cookieHeader(response);
+        if (next !== "") cookie = next;
+      }
+      // The 8 hour limit counts from sign-in, however recent the last visit.
+      for (let step = 7; step <= 24; step += 1) {
+        vi.useFakeTimers({ toFake: ["Date"], now: start + step * 20 * MINUTE });
+        const { response } = await readUser(app, cookie);
+        const next = cookieHeader(response);
+        if (next !== "") cookie = next;
+      }
+      vi.useFakeTimers({ toFake: ["Date"], now: start + (8 * 60 + 1) * MINUTE });
+      expect((await readUser(app, cookie)).user).toBeNull();
+      await app.close();
+    });
+
+    it("refuses an authenticated route for a session idle for more than 30 minutes", async () => {
+      const app = await makeApp();
+      const { response } = await signInAs(app, SEED_USERS[0]?.id ?? "");
+      const cookie = cookieHeader(response);
+      const csrfToken = SessionResponse.parse(response.json()).csrfToken;
+      vi.useFakeTimers({ toFake: ["Date"], now: Date.now() + 31 * MINUTE });
+      const out = await app.inject({
+        method: "DELETE",
+        url: "/api/session",
+        headers: { cookie, "x-csrf-token": csrfToken },
+      });
+      expect(out.statusCode).toBe(401);
+      await app.close();
+    });
+  });
+
   describe("POST /api/session", () => {
     it.each(SEED_USERS.filter((_, index) => index % 2 === 0))(
       "signs in as $role $displayName and writes one audit event",
@@ -128,6 +193,30 @@ describe("sessions", () => {
         await app.close();
       },
     );
+
+    it("signs in nobody when the audit event cannot be written", async () => {
+      const failing = new Proxy(database.db, {
+        get(target, property) {
+          if (property === "insert") {
+            return () => {
+              throw new Error("audit store down");
+            };
+          }
+          const value: unknown = Reflect.get(target, property, target);
+          return value;
+        },
+      });
+      const app = await buildApp({ config: testConfig, db: failing, logger: false });
+      const { response } = await signInAs(app, SEED_USERS[0]?.id ?? "");
+      expect(response.statusCode).toBe(500);
+      const after = await app.inject({
+        method: "GET",
+        url: "/api/session",
+        headers: { cookie: cookieHeader(response) },
+      });
+      expect(SessionResponse.parse(after.json()).user).toBeNull();
+      await app.close();
+    });
 
     it("limits sign-ins to 20 a minute from one address", async () => {
       const app = await makeApp();
@@ -259,6 +348,30 @@ describe("sessions", () => {
         headers: { cookie: cookieHeader(response) },
       });
       expect(SessionResponse.parse(after.json()).user).toBeNull();
+      await app.close();
+    });
+
+    it("refuses a cookie copied before sign-out", async () => {
+      const app = await makeApp();
+      const session = await signedIn(app);
+      const out = await app.inject({
+        method: "DELETE",
+        url: "/api/session",
+        headers: { cookie: session.cookie, "x-csrf-token": session.csrfToken },
+      });
+      expect(out.statusCode).toBe(204);
+      const replay = await app.inject({
+        method: "GET",
+        url: "/api/session",
+        headers: { cookie: session.cookie },
+      });
+      expect(SessionResponse.parse(replay.json()).user).toBeNull();
+      const again = await app.inject({
+        method: "DELETE",
+        url: "/api/session",
+        headers: { cookie: session.cookie, "x-csrf-token": session.csrfToken },
+      });
+      expect(again.statusCode).toBe(401);
       await app.close();
     });
 

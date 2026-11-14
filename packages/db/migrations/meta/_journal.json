@@ -8,6 +8,13 @@
       "when": 1794661456289,
       "tag": "0000_lovely_shaman",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1794662607009,
+      "tag": "0001_milky_riptide",
+      "breakpoints": true
     }
   ]
 }

@@ -1,7 +1,7 @@
 // Drizzle tables go here. Run `pnpm db:generate` after each change and commit the
 // generated migration with it.
 import { sql } from "drizzle-orm";
-import { check, index, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
+import { check, index, integer, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
 
 export const users = pgTable(
   "users",
@@ -9,6 +9,8 @@ export const users = pgTable(
     id: uuid("id").primaryKey(),
     displayName: text("display_name").notNull(),
     role: text("role", { enum: ["buyer", "seller", "approver"] }).notNull(),
+    /** Goes up on sign-out. A session made at an older version is refused. */
+    sessionVersion: integer("session_version").notNull().default(0),
   },
   (table) => [check("users_role_check", sql`${table.role} in ('buyer', 'seller', 'approver')`)],
 );

@@ -16,7 +16,7 @@ export function SignIn({ csrfToken }: { csrfToken: string }) {
       <h2 id="sign-in-heading" tabIndex={-1}>
         Sign in
       </h2>
-      {users.isPending && <p>Loading the users.</p>}
+      {users.isPending && <p role="status">Loading the users.</p>}
       {users.isError && <p role="alert">The users cannot be loaded. Reload this page.</p>}
       {mutation.isError && <p role="alert">Sign-in failed. Reload this page and try again.</p>}
       {users.data && (
@@ -25,6 +25,7 @@ export function SignIn({ csrfToken }: { csrfToken: string }) {
             <li key={user.id}>
               <button
                 type="button"
+                disabled={mutation.isPending}
                 onClick={() => {
                   mutation.mutate(user.id);
                 }}

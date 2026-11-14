@@ -1,7 +1,7 @@
 import type { Database } from "@escrow-lab/db";
 import type { Role, SessionUser } from "@escrow-lab/shared";
 import type { FastifyReply, FastifyRequest } from "fastify";
-import { findUser } from "./users.ts";
+import { findUserWithVersion } from "./users.ts";
 
 declare module "fastify" {
   interface FastifyRequest {
@@ -15,10 +15,47 @@ function refuse(request: FastifyRequest, reply: FastifyReply, status: 401 | 403)
   return reply.status(status).send({ error, requestId: request.id });
 }
 
-async function authenticate(db: Database, request: FastifyRequest): Promise<SessionUser | null> {
+/** A session with no request for this long is refused. */
+export const IDLE_LIMIT_MS = 30 * 60 * 1000;
+/** A session is refused this long after sign-in, however often it is used. */
+export const ABSOLUTE_LIMIT_MS = 8 * 60 * 60 * 1000;
+
+/** Stores who signed in, at which session version and when. Call it after `regenerate()`. */
+export function startSession(request: FastifyRequest, userId: string, sessionVersion: number) {
+  const now = Date.now();
+  request.session.set("userId", userId);
+  request.session.set("sessionVersion", sessionVersion);
+  request.session.set("signedInAt", now);
+  request.session.set("lastSeenAt", now);
+}
+
+/**
+ * The signed-in user, or null. The session must name a user that exists, match the user's
+ * session version, be younger than 8 hours and have been used in the last 30 minutes.
+ * A valid session gets a new last-seen time.
+ */
+export async function authenticate(
+  db: Database,
+  request: FastifyRequest,
+): Promise<SessionUser | null> {
   const userId = request.session.get("userId");
-  const user = userId === undefined ? undefined : await findUser(db, userId);
-  return user ?? null;
+  const version = request.session.get("sessionVersion");
+  const signedInAt = request.session.get("signedInAt");
+  const lastSeenAt = request.session.get("lastSeenAt");
+  if (
+    userId === undefined ||
+    version === undefined ||
+    signedInAt === undefined ||
+    lastSeenAt === undefined
+  ) {
+    return null;
+  }
+  const now = Date.now();
+  if (now - signedInAt > ABSOLUTE_LIMIT_MS || now - lastSeenAt > IDLE_LIMIT_MS) return null;
+  const found = await findUserWithVersion(db, userId);
+  if (found?.sessionVersion !== version) return null;
+  request.session.set("lastSeenAt", now);
+  return found.user;
 }
 
 /** An `onRequest` hook: the session names a user that exists. The role is read from the database. */

@@ -12,6 +12,7 @@ export function SignOut({ csrfToken }: { csrfToken: string }) {
       {mutation.isError && <p role="alert">Sign-out failed. Reload this page and try again.</p>}
       <button
         type="button"
+        disabled={mutation.isPending}
         onClick={() => {
           mutation.mutate();
         }}

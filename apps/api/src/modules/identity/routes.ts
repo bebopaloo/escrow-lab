@@ -4,12 +4,16 @@ import type { preHandlerHookHandler } from "fastify";
 import { z } from "zod";
 import type { FastifyPluginCallbackZod } from "fastify-type-provider-zod";
 import { recordAuditEvent } from "../audit/index.ts";
-import { requireSession } from "./hooks.ts";
-import { findUser, listUsers } from "./users.ts";
+import { authenticate, requireSession, startSession } from "./hooks.ts";
+import { bumpSessionVersion, findUserWithVersion, listUsers } from "./users.ts";
 
 declare module "@fastify/secure-session" {
   interface SessionData {
     userId: string;
+    sessionVersion: number;
+    /** Milliseconds since the epoch. */
+    signedInAt: number;
+    lastSeenAt: number;
   }
 }
 
@@ -33,9 +37,8 @@ export const identityRoutes: FastifyPluginCallbackZod<IdentityOptions> = (app, {
     "/session",
     { config: { public: true }, schema: { response: { 200: SessionResponse } } },
     async (request, reply) => {
-      const userId = request.session.get("userId");
-      const user = userId === undefined ? undefined : await findUser(db, userId);
-      return { user: user ?? null, csrfToken: reply.generateCsrf() };
+      const user = await authenticate(db, request);
+      return { user, csrfToken: reply.generateCsrf() };
     },
   );
   app.post(
@@ -49,14 +52,16 @@ export const identityRoutes: FastifyPluginCallbackZod<IdentityOptions> = (app, {
       },
     },
     async (request, reply) => {
-      const user = await findUser(db, request.body.userId);
-      if (user === undefined) {
+      const found = await findUserWithVersion(db, request.body.userId);
+      if (found === undefined) {
         return reply.status(404).send({ error: "Not found", requestId: request.id });
       }
+      const { user, sessionVersion } = found;
+      // The audit event comes first: when it fails, the reply carries no signed-in session.
+      await recordAuditEvent(db, { userId: user.id, action: "sign_in" });
       // A new session on sign-in stops session fixation and rotates the CSRF secret.
       request.session.regenerate();
-      request.session.set("userId", user.id);
-      await recordAuditEvent(db, { userId: user.id, action: "sign_in" });
+      startSession(request, user.id, sessionVersion);
       return { user, csrfToken: reply.generateCsrf() };
     },
   );
@@ -68,6 +73,8 @@ export const identityRoutes: FastifyPluginCallbackZod<IdentityOptions> = (app, {
       schema: { response: { 204: z.null() } },
     },
     async (request, reply) => {
+      // The cookie holds its own state, so a new session version is what voids a copied cookie.
+      if (request.user !== null) await bumpSessionVersion(db, request.user.id);
       request.session.delete();
       return reply.status(204).send(null);
     },
