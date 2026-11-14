@@ -37,6 +37,30 @@ export default defineConfig(
     rules: { "boundary/import-boundary": "error" },
   },
   {
+    // Only test code can import a fake with a failure script.
+    files: ["apps/api/src/**/*.ts"],
+    ignores: ["**/*.test.ts"],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          patterns: [
+            {
+              group: ["**/chain", "**/chain/index.ts", "**/chain/fake.ts"],
+              importNames: ["createFakeChain"],
+              message: "Only test code can import createFakeChain.",
+            },
+            {
+              group: ["**/payment-rail", "**/payment-rail/index.ts", "**/payment-rail/fake.ts"],
+              importNames: ["createFakePaymentRail"],
+              message: "Only test code can import createFakePaymentRail.",
+            },
+          ],
+        },
+      ],
+    },
+  },
+  {
     files: ["**/*.js"],
     extends: [tseslint.configs.disableTypeChecked],
   },

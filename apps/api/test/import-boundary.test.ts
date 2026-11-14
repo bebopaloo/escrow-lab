@@ -77,3 +77,33 @@ describe("boundary edge cases", () => {
     expect(await boundaryMessages('import "../store/x.ts";\n', file)).toBe(0);
   });
 });
+
+describe("scripted fake factories", () => {
+  async function restrictedMessages(code: string, file: string): Promise<number> {
+    const [result] = await eslint.lintText(code, { filePath: resolve(root, file) });
+    return (result?.messages ?? []).filter((m) => m.ruleId === "no-restricted-imports").length;
+  }
+
+  const cases = [
+    ["createFakeChain", "chain"],
+    ["createFakePaymentRail", "payment-rail"],
+  ] as const;
+
+  it.each(cases)("rejects %s in a production file", async (name, adapter) => {
+    const code = `import { ${name} } from "../../adapters/${adapter}/index.ts";\n`;
+    expect(await restrictedMessages(code, "apps/api/src/modules/deals/service.ts")).toBe(1);
+    expect(await restrictedMessages(code, "apps/api/src/app.ts")).toBe(1);
+  });
+
+  it.each(cases)("allows %s in test code", async (name, adapter) => {
+    const code = `import { ${name} } from "../../adapters/${adapter}/index.ts";\n`;
+    expect(await restrictedMessages(code, "apps/api/src/modules/deals/service.test.ts")).toBe(0);
+    expect(await restrictedMessages(code, "apps/api/test/x.ts")).toBe(0);
+  });
+
+  it("allows the production factories in a production file", async () => {
+    const code =
+      'import { createChain, createPaymentRail } from "../../adapters/chain/index.ts";\n';
+    expect(await restrictedMessages(code, "apps/api/src/modules/deals/service.ts")).toBe(0);
+  });
+});
