@@ -1,7 +1,7 @@
 import { useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { ApprovalItem } from "@escrow-lab/shared";
-import { approvePayout, fetchApprovals } from "./api.ts";
+import { approvePayout, fetchApprovals, retryPayout } from "./api.ts";
 import { formatMoney } from "./money.ts";
 
 export interface ApprovalQueueProps {
@@ -31,7 +31,7 @@ function ItemBody({ item }: { item: ApprovalItem }) {
   );
 }
 
-/** The work that waits for an Approver. Failed items are read-only. */
+/** The work that waits for an Approver. A failed Payout has a Retry button. */
 export function ApprovalQueue({ csrfToken }: ApprovalQueueProps) {
   const client = useQueryClient();
   const heading = useRef<HTMLHeadingElement>(null);
@@ -55,6 +55,15 @@ export function ApprovalQueue({ csrfToken }: ApprovalQueueProps) {
     },
   });
 
+  const retry = useMutation({
+    mutationFn: (item: { id: string; title: string }) => retryPayout(item.id, csrfToken),
+    onSuccess: async (_result, item) => {
+      setNotice(`The Payout for ${item.title} will be tried again.`);
+      await client.invalidateQueries({ queryKey: ["approvals"] });
+      heading.current?.focus();
+    },
+  });
+
   return (
     <section aria-labelledby="approval-queue-heading">
       <h2 id="approval-queue-heading" tabIndex={-1} ref={heading}>
@@ -62,6 +71,7 @@ export function ApprovalQueue({ csrfToken }: ApprovalQueueProps) {
       </h2>
       {notice !== "" && <p role="status">{notice}</p>}
       {approve.isError && <p role="alert">{approve.error.message}</p>}
+      {retry.isError && <p role="alert">{retry.error.message}</p>}
       {queue.isPending && <p role="status">Loading the approval queue.</p>}
       {queue.isError && <p role="alert">The approval queue cannot be loaded. Reload this page.</p>}
       {queue.data && queue.data.total > queue.data.items.length && (
@@ -87,6 +97,17 @@ export function ApprovalQueue({ csrfToken }: ApprovalQueueProps) {
                   }}
                 >
                   Approve the Payout for {item.title}
+                </button>
+              )}
+              {item.kind === "failed_payout" && (
+                <button
+                  type="button"
+                  disabled={retry.isPending}
+                  onClick={() => {
+                    retry.mutate({ id: item.id, title: item.title });
+                  }}
+                >
+                  Retry the Payout for {item.title}
                 </button>
               )}
             </li>
