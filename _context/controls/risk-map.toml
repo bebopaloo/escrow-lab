@@ -5,8 +5,7 @@ paths = [
   "apps/api/src/modules/payout/**",
   "apps/api/src/modules/approval/**",
   "apps/api/src/modules/ledger/**",
-  "apps/api/src/adapters/chain/**",
-  "apps/api/src/adapters/payment-rail/**",
+  "apps/api/src/adapters/**",
 ]
 
 [[tier]]
