@@ -79,6 +79,26 @@ describe("ApprovalQueue", () => {
     expect(await screen.findByText("Nothing waits for approval.")).toBeVisible();
   });
 
+  it("tells the Approver when the queue shows only part of the items", async () => {
+    server.use(
+      http.get("*/api/approvals", () =>
+        HttpResponse.json({ items: [ITEMS[0]], total: 150, limit: 100, offset: 0 }),
+      ),
+    );
+    renderQueue();
+    expect(await screen.findByText("This queue shows 1 of 150 items.")).toHaveAttribute(
+      "role",
+      "status",
+    );
+  });
+
+  it("shows no partial-queue notice when all items are shown", async () => {
+    server.use(http.get("*/api/approvals", () => page(ITEMS)));
+    renderQueue();
+    await screen.findByRole("listitem", { name: /Draft/ });
+    expect(screen.queryByText(/This queue shows/)).not.toBeInTheDocument();
+  });
+
   it("shows a generic error when the queue cannot be read", async () => {
     server.use(http.get("*/api/approvals", () => new HttpResponse(null, { status: 500 })));
     renderQueue();

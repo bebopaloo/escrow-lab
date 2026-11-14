@@ -1,6 +1,6 @@
 import { schema, type Database } from "@escrow-lab/db";
 import type { ApprovalItem } from "@escrow-lab/shared";
-import { count, eq, sql } from "drizzle-orm";
+import { and, count, eq, notExists, sql } from "drizzle-orm";
 import { unionAll } from "drizzle-orm/pg-core";
 
 export interface QueuePage {
@@ -17,6 +17,13 @@ export async function listApprovalQueue(
   limit: number,
   offset: number,
 ): Promise<QueuePage> {
+  // A Milestone with a Payout is not approvable: a failed Payout shows as its own item.
+  const hasNoPayout = notExists(
+    db
+      .select({ one: sql`1` })
+      .from(schema.payouts)
+      .where(eq(schema.payouts.milestoneId, schema.milestones.id)),
+  );
   const milestoneRows = db
     .select({
       kind: sql<string>`'milestone'`.as("kind"),
@@ -29,7 +36,7 @@ export async function listApprovalQueue(
     })
     .from(schema.milestones)
     .innerJoin(schema.deals, eq(schema.deals.id, schema.milestones.dealId))
-    .where(eq(schema.milestones.state, "accepted"));
+    .where(and(eq(schema.milestones.state, "accepted"), hasNoPayout));
   const payoutRows = db
     .select({
       kind: sql<string>`'failed_payout'`.as("kind"),
@@ -65,7 +72,7 @@ export async function listApprovalQueue(
     db
       .select({ n: count() })
       .from(schema.milestones)
-      .where(eq(schema.milestones.state, "accepted")),
+      .where(and(eq(schema.milestones.state, "accepted"), hasNoPayout)),
     db.select({ n: count() }).from(schema.payouts).where(eq(schema.payouts.state, "failed")),
     db.select({ n: count() }).from(schema.deals).where(eq(schema.deals.state, "funding_failed")),
   ]);

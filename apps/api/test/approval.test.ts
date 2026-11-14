@@ -339,6 +339,33 @@ describe("Approve a Payout", () => {
       expect(page.items.find((item) => item.id === first)).toBeUndefined();
     });
 
+    it("does not list a Milestone whose Payout is pending", async () => {
+      const { first, dealId } = await newDeal();
+      scriptChain([{ kind: "fail", failure: "timeout" }]);
+      await approve(ERIN, first);
+      scriptChain([]);
+      expect((await milestone(first))?.state).toBe("accepted");
+      const page = ApprovalQueueResponse.parse((await queue(ERIN, "?limit=100")).body);
+      expect(page.items.filter((item) => item.dealId === dealId)).toHaveLength(0);
+    });
+
+    it("lists a Milestone with a failed Payout once and counts it once", async () => {
+      const before = ApprovalQueueResponse.parse((await queue(ERIN, "?limit=100")).body).total;
+      const { first, dealId } = await newDeal();
+      scriptChain([{ kind: "fail", failure: "timeout" }]);
+      await approve(ERIN, first);
+      scriptChain([]);
+      await database.db
+        .update(schema.payouts)
+        .set({ state: "failed" })
+        .where(eq(schema.payouts.milestoneId, first));
+      const page = ApprovalQueueResponse.parse((await queue(ERIN, "?limit=100")).body);
+      const mine = page.items.filter((item) => item.dealId === dealId);
+      expect(mine).toHaveLength(1);
+      expect(mine[0]?.kind).toBe("failed_payout");
+      expect(page.total - before).toBe(1);
+    });
+
     it("pages the items and refuses a page size above the maximum", async () => {
       await newDeal();
       await newDeal();

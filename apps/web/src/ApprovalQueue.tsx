@@ -64,6 +64,11 @@ export function ApprovalQueue({ csrfToken }: ApprovalQueueProps) {
       {approve.isError && <p role="alert">{approve.error.message}</p>}
       {queue.isPending && <p role="status">Loading the approval queue.</p>}
       {queue.isError && <p role="alert">The approval queue cannot be loaded. Reload this page.</p>}
+      {queue.data && queue.data.total > queue.data.items.length && (
+        <p role="status">
+          This queue shows {queue.data.items.length} of {queue.data.total} items.
+        </p>
+      )}
       {queue.data?.items.length === 0 && <p>Nothing waits for approval.</p>}
       {queue.data !== undefined && queue.data.items.length > 0 && (
         <ul>
