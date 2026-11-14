@@ -3,6 +3,7 @@ import {
   DealResponse,
   ErrorResponse,
   HealthResponse,
+  PAYMENT_FAILED,
   SessionResponse,
   UsersResponse,
   type CreateDealRequest,
@@ -97,4 +98,16 @@ export async function createDeal(
     );
   }
   return DealResponse.parse(await readJson(response, 201, "Create Deal"));
+}
+
+/** The payment rail refused the charge. The Deal is back in draft. */
+export class PaymentFailedError extends Error {}
+
+export async function fundDeal(id: string, csrfToken: string): Promise<DealResponse> {
+  const response = await fetch(
+    new URL(`/api/deals/${encodeURIComponent(id)}/fund`, window.location.origin),
+    { method: "POST", headers: { "x-csrf-token": csrfToken } },
+  );
+  if (response.status === 402) throw new PaymentFailedError(PAYMENT_FAILED);
+  return DealResponse.parse(await readJson(response, 200, "Fund Deal"));
 }

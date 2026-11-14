@@ -1,7 +1,17 @@
 // Drizzle tables go here. Run `pnpm db:generate` after each change and commit the
 // generated migration with it.
 import { sql } from "drizzle-orm";
-import { check, index, integer, pgTable, text, timestamp, unique, uuid } from "drizzle-orm/pg-core";
+import {
+  check,
+  index,
+  integer,
+  pgTable,
+  text,
+  timestamp,
+  unique,
+  uniqueIndex,
+  uuid,
+} from "drizzle-orm/pg-core";
 
 export const users = pgTable(
   "users",
@@ -93,5 +103,29 @@ export const milestones = pgTable(
       "milestones_state_check",
       sql`${table.state} in ('pending', 'awaiting_evidence', 'evidence_sent', 'accepted', 'paid')`,
     ),
+  ],
+);
+
+/** Insert only: the migration adds a trigger that refuses UPDATE and DELETE. */
+export const ledgerEntries = pgTable(
+  "ledger_entries",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    dealId: uuid("deal_id")
+      .notNull()
+      .references(() => deals.id),
+    kind: text("kind", { enum: ["deposit", "payout"] }).notNull(),
+    amountMinor: integer("amount_minor").notNull(),
+    chainTxId: text("chain_tx_id").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index("ledger_entries_deal_id_idx").on(table.dealId),
+    // A Deal has one deposit.
+    uniqueIndex("ledger_entries_one_deposit_idx")
+      .on(table.dealId)
+      .where(sql`${table.kind} = 'deposit'`),
+    check("ledger_entries_kind_check", sql`${table.kind} in ('deposit', 'payout')`),
+    check("ledger_entries_amount_check", sql`${table.amountMinor} >= 1`),
   ],
 );

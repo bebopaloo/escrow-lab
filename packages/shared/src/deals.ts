@@ -87,3 +87,6 @@ export const DealListResponse = z
 export type DealListResponse = z.infer<typeof DealListResponse>;
 
 export const DealIdParams = z.object({ id: z.uuid() }).strict();
+
+export const PAYMENT_FAILED = "The payment failed. Try again.";
+export const WRONG_DEAL_STATE = "The Deal is not in the right state for this action.";
