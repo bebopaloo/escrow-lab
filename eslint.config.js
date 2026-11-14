@@ -4,11 +4,7 @@ import prettier from "eslint-config-prettier";
 import reactHooks from "eslint-plugin-react-hooks";
 import globals from "globals";
 import tseslint from "typescript-eslint";
-
-const boundary = {
-  group: ["**/modules/*/*", "!**/modules/*/index.ts", "**/adapters/*/*", "!**/adapters/*/index.ts"],
-  message: "Import a module or an adapter through its index.ts only.",
-};
+import boundary from "./eslint-rules/import-boundary.js";
 
 export default defineConfig(
   {
@@ -35,25 +31,10 @@ export default defineConfig(
     languageOptions: { globals: globals.browser },
   },
   {
+    // Code may reach a module or an adapter through its index.ts only.
     files: ["apps/api/**/*.ts"],
-    rules: {
-      "no-restricted-imports": ["error", { patterns: [boundary] }],
-    },
-  },
-  {
-    // A module also may not reach the inner files of a sibling module, such as "../ledger/store.ts".
-    files: ["apps/api/src/modules/**/*.ts"],
-    rules: {
-      "no-restricted-imports": [
-        "error",
-        {
-          patterns: [
-            boundary,
-            { regex: String.raw`^\.\./[^/]+/(?!index\.ts$)[^/]+$`, message: boundary.message },
-          ],
-        },
-      ],
-    },
+    plugins: { boundary },
+    rules: { "boundary/import-boundary": "error" },
   },
   {
     files: ["**/*.js"],
