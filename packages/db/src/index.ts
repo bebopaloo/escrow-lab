@@ -26,3 +26,5 @@ export async function migrateDatabase(db: Database): Promise<void> {
 }
 
 export { schema };
+
+export { SEED_USERS, seedUsers, type SeedUser } from "./seed-data.ts";

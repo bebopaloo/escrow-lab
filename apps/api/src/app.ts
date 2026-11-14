@@ -1,5 +1,8 @@
 import cors from "@fastify/cors";
+import csrfProtection from "@fastify/csrf-protection";
 import helmet from "@fastify/helmet";
+import rateLimit from "@fastify/rate-limit";
+import secureSession from "@fastify/secure-session";
 import type { Database } from "@escrow-lab/db";
 import Fastify, { type FastifyServerOptions } from "fastify";
 import {
@@ -8,6 +11,7 @@ import {
   type ZodTypeProvider,
 } from "fastify-type-provider-zod";
 import type { Config } from "./config.ts";
+import { identityRoutes } from "./modules/identity/index.ts";
 import { healthRoutes } from "./routes/health.ts";
 
 declare module "fastify" {
@@ -23,12 +27,17 @@ export interface AppOptions {
   logger?: FastifyServerOptions["logger"];
 }
 
+const SESSION_MAX_AGE_SECONDS = 8 * 60 * 60;
+const SESSION_COOKIE_NAME = "__Host-session";
+
 const REDACTED_KEYS = ["req.headers.authorization", "req.headers.cookie", "*.password", "*.token"];
 
 export async function buildApp({ config, db, logger }: AppOptions) {
   const app = Fastify({
     logger: logger ?? { level: config.LOG_LEVEL, redact: REDACTED_KEYS },
   }).withTypeProvider<ZodTypeProvider>();
+
+  app.decorateRequest("user", null);
 
   app.setValidatorCompiler(validatorCompiler);
   app.setSerializerCompiler(serializerCompiler);
@@ -45,6 +54,21 @@ export async function buildApp({ config, db, logger }: AppOptions) {
 
   await app.register(helmet);
   await app.register(cors, { origin: config.CORS_ORIGINS });
+  await app.register(secureSession, {
+    key: Buffer.from(config.SESSION_KEY, "hex"),
+    cookieName: SESSION_COOKIE_NAME,
+    // The server refuses a session older than the cookie lifetime, even with a copied cookie.
+    expiry: SESSION_MAX_AGE_SECONDS,
+    cookie: {
+      path: "/",
+      httpOnly: true,
+      secure: true,
+      sameSite: "lax",
+      maxAge: SESSION_MAX_AGE_SECONDS,
+    },
+  });
+  await app.register(rateLimit, { global: false });
+  await app.register(csrfProtection, { sessionPlugin: "@fastify/secure-session" });
 
   // Deny by default: an app route without an auth decision fails at start-up.
   // Added after the CORS plugin, whose preflight route needs no sign-in.
@@ -55,6 +79,7 @@ export async function buildApp({ config, db, logger }: AppOptions) {
   });
 
   await app.register(healthRoutes, { prefix: "/api", db });
+  await app.register(identityRoutes, { prefix: "/api", db });
 
   return app;
 }

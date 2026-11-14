@@ -7,3 +7,4 @@ export const HealthResponse = z
   .strict();
 
 export type HealthResponse = z.infer<typeof HealthResponse>;
+export * from "./identity.ts";
