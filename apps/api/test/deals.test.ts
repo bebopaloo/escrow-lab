@@ -1,9 +1,10 @@
 import { SEED_USERS, schema, seedUsers } from "@escrow-lab/db";
-import { DealListResponse, DealResponse, ErrorResponse, SessionResponse } from "@escrow-lab/shared";
+import { DealListResponse, DealResponse, ErrorResponse } from "@escrow-lab/shared";
 import { and, eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { buildApp } from "../src/app.ts";
 import { openTestDatabase, testConfig } from "./database.ts";
+import { signIn as signInOn, type Session } from "./harness.ts";
 
 const ALICE = SEED_USERS[0]?.id ?? "";
 const BOB = SEED_USERS[1]?.id ?? "";
@@ -26,28 +27,12 @@ describe("deals", () => {
     await database.close();
   });
 
-  function cookieOf(response: { headers: Record<string, unknown> }): string {
-    const header = response.headers["set-cookie"];
-    const lines = Array.isArray(header) ? header : typeof header === "string" ? [header] : [];
-    return lines.map((line) => String(line).split(";")[0]).join("; ");
-  }
-
   // Sign-in is rate limited, so each user signs in once.
   const sessions = new Map<string, { cookie: string; csrfToken: string }>();
-  async function signIn(userId: string) {
+  async function signIn(userId: string): Promise<Session> {
     const known = sessions.get(userId);
     if (known !== undefined) return known;
-    const visit = await app.inject({ method: "GET", url: "/api/session" });
-    const token = SessionResponse.parse(visit.json()).csrfToken;
-    const response = await app.inject({
-      method: "POST",
-      url: "/api/session",
-      headers: { cookie: cookieOf(visit), "x-csrf-token": token },
-      payload: { userId },
-    });
-    const cookie = cookieOf(response);
-    const csrfToken = SessionResponse.parse(response.json()).csrfToken;
-    const session = { cookie, csrfToken };
+    const session = await signInOn(app, userId);
     sessions.set(userId, session);
     return session;
   }

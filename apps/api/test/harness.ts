@@ -1,6 +1,7 @@
 import { SEED_USERS, schema } from "@escrow-lab/db";
 import { DealResponse, SessionResponse } from "@escrow-lab/shared";
 import { eq, inArray } from "drizzle-orm";
+import type { FastifyInstance } from "fastify";
 import { buildApp } from "../src/app.ts";
 import { createFakeChain, type Chain, type Step } from "../src/adapters/chain/index.ts";
 import { createFakePaymentRail, type PaymentRail } from "../src/adapters/payment-rail/index.ts";
@@ -26,10 +27,34 @@ export interface HarnessOptions {
   rail?: readonly Step[];
 }
 
-function cookieOf(response: { headers: Record<string, unknown> }): string {
+export function cookieOf(response: { headers: Record<string, unknown> }): string {
   const header = response.headers["set-cookie"];
   const lines = Array.isArray(header) ? header : typeof header === "string" ? [header] : [];
   return lines.map((line) => String(line).split(";")[0]).join("; ");
+}
+
+export interface Session {
+  cookie: string;
+  csrfToken: string;
+}
+
+/** Signs a user in on an app. Sign-in is rate limited, so a test that needs one user often keeps the session. */
+export async function signIn(
+  app: Pick<FastifyInstance, "inject">,
+  userId: string,
+): Promise<Session> {
+  const visit = await app.inject({ method: "GET", url: "/api/session" });
+  const token = SessionResponse.parse(visit.json()).csrfToken;
+  const response = await app.inject({
+    method: "POST",
+    url: "/api/session",
+    headers: { cookie: cookieOf(visit), "x-csrf-token": token },
+    payload: { userId },
+  });
+  return {
+    cookie: cookieOf(response),
+    csrfToken: SessionResponse.parse(response.json()).csrfToken,
+  };
 }
 
 /**
@@ -70,23 +95,12 @@ export async function startHarness(database: TestDatabase, options: HarnessOptio
     paymentRail,
     now: () => new Date(clock),
   });
-  const sessions = new Map<string, { cookie: string; csrfToken: string }>();
+  const sessions = new Map<string, Session>();
 
   async function call(userId: string, method: "GET" | "POST", url: string, payload: object = {}) {
     let who = sessions.get(userId);
     if (who === undefined) {
-      const visit = await app.inject({ method: "GET", url: "/api/session" });
-      const token = SessionResponse.parse(visit.json()).csrfToken;
-      const signedIn = await app.inject({
-        method: "POST",
-        url: "/api/session",
-        headers: { cookie: cookieOf(visit), "x-csrf-token": token },
-        payload: { userId },
-      });
-      who = {
-        cookie: cookieOf(signedIn),
-        csrfToken: SessionResponse.parse(signedIn.json()).csrfToken,
-      };
+      who = await signIn(app, userId);
       sessions.set(userId, who);
     }
     return app.inject({

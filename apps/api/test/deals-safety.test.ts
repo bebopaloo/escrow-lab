@@ -1,10 +1,10 @@
 import { SEED_USERS, schema, seedUsers } from "@escrow-lab/db";
-import { SessionResponse } from "@escrow-lab/shared";
 import { randomUUID } from "node:crypto";
 import { eq, sql } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { buildApp } from "../src/app.ts";
 import { openTestDatabase, testConfig } from "./database.ts";
+import { signIn } from "./harness.ts";
 
 const ALICE = SEED_USERS[0]?.id ?? "";
 const CAROL = SEED_USERS[2]?.id ?? "";
@@ -24,26 +24,8 @@ describe("POST /deals safety", () => {
     await database.close();
   });
 
-  function cookieOf(response: { headers: Record<string, unknown> }): string {
-    const header = response.headers["set-cookie"];
-    const lines = Array.isArray(header) ? header : typeof header === "string" ? [header] : [];
-    return lines.map((line) => String(line).split(";")[0]).join("; ");
-  }
-
   async function signInBuyer() {
-    const visit = await app.inject({ method: "GET", url: "/api/session" });
-    const token = SessionResponse.parse(visit.json()).csrfToken;
-    const response = await app.inject({
-      method: "POST",
-      url: "/api/session",
-      headers: { cookie: cookieOf(visit), "x-csrf-token": token },
-      payload: { userId: ALICE },
-    });
-    return {
-      id: ALICE,
-      cookie: cookieOf(response),
-      csrfToken: SessionResponse.parse(response.json()).csrfToken,
-    };
+    return { id: ALICE, ...(await signIn(app, ALICE)) };
   }
 
   const payload = {
