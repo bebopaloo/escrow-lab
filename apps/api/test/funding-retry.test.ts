@@ -283,19 +283,66 @@ describe("retry a Deal's funding", () => {
     expect(await ledgerOf(dealId)).toHaveLength(0);
   });
 
+  it("marks the Deal funding_failed after 5 charge timeouts, with no deposit and no return to draft", async () => {
+    const railFails: RailStep[] = Array.from({ length: 6 }, () => ({
+      kind: "fail",
+      failure: "timeout",
+    }));
+    const t = await begin(railFails);
+    const dealId = await t.fundNewDeal();
+    expect((await dealRow(dealId))?.state).toBe("funding");
+    for (let attempt = 1; attempt <= 5; attempt += 1) {
+      t.advance(60_000);
+      await t.job.runOnce({ dealIds: [dealId] });
+      const row = await dealRow(dealId);
+      expect(row?.fundingAttempts).toBe(attempt);
+      if (attempt < 5) expect(row?.state).toBe("funding");
+    }
+    const row = await dealRow(dealId);
+    expect(row?.state).toBe("funding_failed");
+    expect(row?.fundingIdempotencyKey).not.toBeNull();
+    expect(await ledgerOf(dealId)).toHaveLength(0);
+    expect(t.lockKeys).toHaveLength(0);
+    expect(await auditActions(dealId)).toContain("funding_failed");
+    t.advance(60_000);
+    await t.job.runOnce({ dealIds: [dealId] });
+    expect(t.chargeKeys).toHaveLength(6);
+  });
+
   it("runs every 30 seconds after start and stops after stop", async () => {
-    vi.useFakeTimers();
-    const t = await begin();
-    const spy = vi.spyOn(t.job, "runOnce").mockResolvedValue(undefined);
+    // The script is long, so other Deals in the shared database do not use it up.
+    const t = await begin(
+      Array.from({ length: 200 }, (): RailStep => ({ kind: "fail", failure: "timeout" })),
+    );
+    const dealId = await t.fundNewDeal();
+    const key = (await dealRow(dealId))?.fundingIdempotencyKey;
+    const tries = () => t.chargeKeys.filter((k) => k === key).length;
+    expect(tries()).toBe(1);
+    // Only the interval is fake, so the database calls still use real time.
+    vi.useFakeTimers({ toFake: ["setInterval", "clearInterval"] });
+    t.advance(60_000);
     t.job.start();
     await vi.advanceTimersByTimeAsync(29_999);
-    expect(spy).toHaveBeenCalledTimes(0);
+    expect(tries()).toBe(1);
     await vi.advanceTimersByTimeAsync(1);
-    expect(spy).toHaveBeenCalledTimes(1);
+    await vi.waitFor(() => {
+      expect(tries()).toBe(2);
+    });
+    await vi.waitFor(async () => {
+      expect((await dealRow(dealId))?.fundingAttempts).toBe(1);
+    });
+    t.advance(60_000);
     await vi.advanceTimersByTimeAsync(30_000);
-    expect(spy).toHaveBeenCalledTimes(2);
+    await vi.waitFor(() => {
+      expect(tries()).toBe(3);
+    });
+    await vi.waitFor(async () => {
+      expect((await dealRow(dealId))?.fundingAttempts).toBe(2);
+    });
     t.job.stop();
+    t.advance(60_000);
     await vi.advanceTimersByTimeAsync(90_000);
-    expect(spy).toHaveBeenCalledTimes(2);
+    expect(vi.getTimerCount()).toBe(0);
+    expect(tries()).toBe(3);
   });
 });
