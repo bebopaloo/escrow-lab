@@ -72,3 +72,58 @@ test("a Buyer funds a Deal and the first Milestone opens", async ({ page }) => {
   const results = await new AxeBuilder({ page }).withTags(WCAG_22_AA).analyze();
   expect(results.violations).toEqual([]);
 });
+
+test("a Seller sends evidence, the Buyer rejects it, then accepts the new evidence", async ({
+  page,
+}) => {
+  const title = `Evidence ${Date.now().toString()}`;
+  await page.goto("/");
+  await page.getByRole("button", { name: /Bob Buyer/ }).click();
+  await page.getByRole("button", { name: "Create a Deal" }).click();
+  await page.getByLabel("Seller").selectOption({ label: "Carol Seller" });
+  await page.getByLabel("Deal title").fill(title);
+  await page.getByLabel("Total (£)").fill("1000");
+  await page.getByLabel("Milestone 1 title").fill("Draft");
+  await page.getByLabel("Milestone 1 amount (£)").fill("1000");
+  await page.getByRole("button", { name: "Create the Deal" }).click();
+  await expect(page.getByRole("heading", { name: title })).toBeFocused();
+  await page.getByRole("button", { name: "Fund the Deal" }).click();
+  await expect(page.getByText("The Deal is funded.")).toBeVisible();
+  await page.getByRole("button", { name: "Sign out" }).click();
+
+  await page.getByRole("button", { name: /Carol Seller/ }).click();
+  await page.getByRole("link", { name: title }).click();
+  await page.getByLabel("Evidence", { exact: true }).fill("First link");
+  const formScan = await new AxeBuilder({ page }).withTags(WCAG_22_AA).analyze();
+  expect(formScan.violations).toEqual([]);
+  await page.getByRole("button", { name: "Send evidence" }).click();
+  await expect(page.getByText("The evidence is sent.")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Evidence for Milestone 1" })).toBeFocused();
+  await page.getByRole("button", { name: "Sign out" }).click();
+
+  await page.getByRole("button", { name: /Bob Buyer/ }).click();
+  await page.getByRole("link", { name: title }).click();
+  await expect(page.getByText("First link")).toBeVisible();
+  const reviewScan = await new AxeBuilder({ page }).withTags(WCAG_22_AA).analyze();
+  expect(reviewScan.violations).toEqual([]);
+  await page.getByLabel("Reason for rejection").fill("Wrong file");
+  await page.getByRole("button", { name: "Reject the evidence" }).click();
+  await expect(page.getByText("The evidence is rejected.")).toBeVisible();
+  await page.getByRole("button", { name: "Sign out" }).click();
+
+  await page.getByRole("button", { name: /Carol Seller/ }).click();
+  await page.getByRole("link", { name: title }).click();
+  await expect(page.getByText("Wrong file")).toBeVisible();
+  await page.getByLabel("Evidence", { exact: true }).fill("Second link");
+  await page.getByRole("button", { name: "Send evidence" }).click();
+  await expect(page.getByText("The evidence is sent.")).toBeVisible();
+  await page.getByRole("button", { name: "Sign out" }).click();
+
+  await page.getByRole("button", { name: /Bob Buyer/ }).click();
+  await page.getByRole("link", { name: title }).click();
+  await page.getByRole("button", { name: "Accept the evidence" }).click();
+  await expect(page.getByText("The evidence is accepted.")).toBeVisible();
+  await expect(page.getByRole("row", { name: /Draft.*accepted/ })).toBeVisible();
+  const doneScan = await new AxeBuilder({ page }).withTags(WCAG_22_AA).analyze();
+  expect(doneScan.violations).toEqual([]);
+});

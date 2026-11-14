@@ -15,6 +15,7 @@ import { createPaymentRail, type PaymentRail } from "./adapters/payment-rail/ind
 import type { Config } from "./config.ts";
 import { dealRoutes } from "./modules/deals/index.ts";
 import { identityRoutes } from "./modules/identity/index.ts";
+import { milestoneRoutes } from "./modules/milestones/index.ts";
 import { healthRoutes } from "./routes/health.ts";
 
 declare module "fastify" {
@@ -94,6 +95,7 @@ export async function buildApp({
   await app.register(healthRoutes, { prefix: "/api", db });
   await app.register(identityRoutes, { prefix: "/api", db });
   await app.register(dealRoutes, { prefix: "/api", db, chain, paymentRail });
+  await app.register(milestoneRoutes, { prefix: "/api", db });
 
   return app;
 }
