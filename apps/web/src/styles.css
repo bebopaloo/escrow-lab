@@ -1,0 +1,15 @@
+/* WCAG 2.2 target size: each button is at least 24 by 24 CSS pixels. */
+button {
+  min-height: 2.75rem;
+  min-width: 2.75rem;
+  padding: 0.5rem 1rem;
+}
+
+ul {
+  list-style: none;
+  padding: 0;
+}
+
+li + li {
+  margin-top: 0.5rem;
+}

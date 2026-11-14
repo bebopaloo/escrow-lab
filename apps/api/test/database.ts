@@ -38,7 +38,11 @@ const callerDatabaseUrl = process.env.TEST_DATABASE_URL;
 export const TEST_DATABASE_URL =
   callerDatabaseUrl ?? worktreeDatabaseUrl(path.basename(REPO_ROOT), process.env.DB_PORT);
 
-export const testConfig = loadConfig({ DATABASE_URL: TEST_DATABASE_URL, LOG_LEVEL: "silent" });
+export const testConfig = loadConfig({
+  DATABASE_URL: TEST_DATABASE_URL,
+  SESSION_KEY: "5e".repeat(32), // a fixed fake key, for tests only
+  LOG_LEVEL: "silent",
+});
 
 function errorCode(error: unknown): unknown {
   if (typeof error !== "object" || error === null) return undefined;

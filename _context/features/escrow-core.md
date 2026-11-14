@@ -153,6 +153,7 @@ Milestones run in order: only one Milestone of a Deal is open at one time.
 | Route | Who | Does |
 |---|---|---|
 | `GET /api/users` | public | The seeded users for the sign-in page |
+| `GET /api/session` | public | The signed-in user (or none) and the CSRF token |
 | `POST /api/session`, `DELETE /api/session` | public, signed in | Sign in as a seeded user, sign out |
 | `GET /api/deals`, `GET /api/deals/:id` | Buyer, Seller | Own Deals only, paginated |
 | `POST /api/deals` | Buyer | Create a Deal with its Milestones |

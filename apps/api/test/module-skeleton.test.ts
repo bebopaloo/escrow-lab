@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
-const paths = ["payout", "approval", "ledger", "identity", "audit", "deals", "milestones"].map(
+// `identity` and `audit` have code now, so they are not in this list.
+const paths = ["payout", "approval", "ledger", "deals", "milestones"].map(
   (name) => `../src/modules/${name}/index.ts`,
 );
 paths.push("../src/adapters/chain/index.ts", "../src/adapters/payment-rail/index.ts");
