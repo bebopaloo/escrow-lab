@@ -32,12 +32,12 @@ export function CreateDeal({ csrfToken, onCreated, onCancel }: CreateDealProps) 
   const [formError, setFormError] = useState<string | null>(null);
   const [badTotal, setBadTotal] = useState(false);
   const [badAmounts, setBadAmounts] = useState<boolean[]>([]);
-  const focusAfterRemoval = useRef<number | null>(null);
+  const focusIndex = useRef<number | null>(null);
 
   useEffect(() => {
-    if (focusAfterRemoval.current === null) return;
-    document.getElementById(`milestone-title-${focusAfterRemoval.current.toString()}`)?.focus();
-    focusAfterRemoval.current = null;
+    if (focusIndex.current === null) return;
+    document.getElementById(`milestone-title-${focusIndex.current.toString()}`)?.focus();
+    focusIndex.current = null;
   }, [milestones]);
 
   const mutation = useMutation({
@@ -169,7 +169,7 @@ export function CreateDeal({ csrfToken, onCreated, onCancel }: CreateDealProps) 
                 <button
                   type="button"
                   onClick={() => {
-                    focusAfterRemoval.current = Math.min(index, milestones.length - 2);
+                    focusIndex.current = Math.min(index, milestones.length - 2);
                     setMilestones((current) => current.filter((_, position) => position !== index));
                   }}
                 >
@@ -182,6 +182,7 @@ export function CreateDeal({ csrfToken, onCreated, onCancel }: CreateDealProps) 
             type="button"
             disabled={milestones.length >= MAX_MILESTONES}
             onClick={() => {
+              focusIndex.current = milestones.length;
               setMilestones((current) => [...current, { title: "", amount: "" }]);
             }}
           >

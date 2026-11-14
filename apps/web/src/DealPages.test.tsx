@@ -276,6 +276,19 @@ describe("Create Deal", () => {
     }
     expect(screen.getByRole("button", { name: "Add a Milestone" })).toBeDisabled();
   });
+  it("moves focus to the title of a new Milestone, also after the 10th", async () => {
+    signedInAs(ALICE);
+    renderApp();
+    await openForm();
+    await userEvent.click(screen.getByRole("button", { name: "Add a Milestone" }));
+    expect(screen.getByLabelText("Milestone 2 title")).toHaveFocus();
+    for (let i = 0; i < 8; i += 1) {
+      await userEvent.click(screen.getByRole("button", { name: "Add a Milestone" }));
+    }
+    expect(screen.getByRole("button", { name: "Add a Milestone" })).toBeDisabled();
+    expect(screen.getByLabelText("Milestone 10 title")).toHaveFocus();
+  });
+
   it("moves focus to the nearest Milestone title after a removal", async () => {
     signedInAs(ALICE);
     renderApp();

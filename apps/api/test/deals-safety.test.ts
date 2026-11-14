@@ -72,7 +72,7 @@ describe("POST /deals safety", () => {
       create function ${fn}() returns trigger language plpgsql as $$
       begin
         if new.action = 'create_deal'
-          and exists (select 1 from deals where id = new.deal_id and title = ${sql.raw(`'${title}'`)}) then
+          and exists (select 1 from deals where id = new.deal_id and title like 'Refused audit %') then
           raise exception 'audit refused';
         end if;
         return new;

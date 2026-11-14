@@ -25,6 +25,8 @@ test("a Buyer creates a Deal and the Seller sees it", async ({ page }) => {
   await page.getByLabel("Milestone 2 amount (£)").fill("500");
   await page.getByRole("button", { name: "Create the Deal" }).click();
   await expect(page.getByRole("alert")).toHaveText("The Milestones must add up to the total.");
+  const refusalScan = await new AxeBuilder({ page }).withTags(WCAG_22_AA).analyze();
+  expect(refusalScan.violations).toEqual([]);
 
   await page.getByLabel("Milestone 2 amount (£)").fill("600");
   await page.getByRole("button", { name: "Create the Deal" }).click();
@@ -37,6 +39,8 @@ test("a Buyer creates a Deal and the Seller sees it", async ({ page }) => {
   await page.getByRole("button", { name: /Carol Seller/ }).click();
   await expect(page.getByRole("link", { name: title })).toBeVisible();
   await expect(page.getByRole("button", { name: "Create a Deal" })).toHaveCount(0);
+  const listScan = await new AxeBuilder({ page }).withTags(WCAG_22_AA).analyze();
+  expect(listScan.violations).toEqual([]);
 
   await page.getByRole("button", { name: "Sign out" }).click();
   await page.getByRole("button", { name: /Dan Seller/ }).click();
