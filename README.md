@@ -18,7 +18,15 @@ You need Node 26, pnpm 12 (`npm install --global pnpm@12.18.0`) and Docker.
 pnpm install
 docker compose up -d --wait db
 pnpm db:migrate
+pnpm db:seed
 pnpm dev
+```
+
+`pnpm db:seed` writes the seed users to the database. `pnpm dev` starts the API and the web app together. To run one of them alone, use these commands:
+
+```bash
+pnpm --filter @escrow-lab/api dev
+pnpm --filter @escrow-lab/web dev
 ```
 
 The web app runs at http://127.0.0.1:41073 and calls the API at http://127.0.0.1:41030 through the Vite proxy.
@@ -43,6 +51,21 @@ Two git worktrees of this repo can run their tests at the same time:
 
 - The API tests use the database `app_test_<folder>`, where `<folder>` is the name of the checkout folder. The tests create it when it does not exist. Set `TEST_DATABASE_URL` to use a different database.
 - `pnpm test:e2e` starts the dev servers on free ports. Set `E2E_WEB_PORT` and `E2E_API_PORT` to choose the ports.
+
+## Run each test suite
+
+Start the database and migrate first (see [Start](#start)). Then run the suite that you need:
+
+```bash
+pnpm test
+pnpm --filter @escrow-lab/api test
+pnpm --filter @escrow-lab/web test
+pnpm --filter @escrow-lab/api exec vitest run <file> -t "<name>"
+pnpm exec playwright install chromium
+pnpm test:e2e
+```
+
+`pnpm test` runs the tests of every package. The `playwright install` command is only for the first end-to-end run.
 
 ## Check
 
