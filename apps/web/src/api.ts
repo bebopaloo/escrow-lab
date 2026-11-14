@@ -1,4 +1,12 @@
-import { HealthResponse, SessionResponse, UsersResponse } from "@escrow-lab/shared";
+import {
+  DealListResponse,
+  DealResponse,
+  ErrorResponse,
+  HealthResponse,
+  SessionResponse,
+  UsersResponse,
+  type CreateDealRequest,
+} from "@escrow-lab/shared";
 
 export async function fetchHealth(signal?: AbortSignal): Promise<HealthResponse> {
   const url = new URL("/api/health", window.location.origin);
@@ -49,4 +57,44 @@ export async function signOut(csrfToken: string): Promise<void> {
   if (response.status !== 204) {
     throw new Error(`Sign-out failed with status ${response.status.toString()}`);
   }
+}
+
+export class NotFoundError extends Error {}
+
+/** A refusal that the API explains in words that the person can read. */
+export class RefusedError extends Error {}
+
+export async function fetchDeals(signal?: AbortSignal): Promise<DealListResponse> {
+  const url = new URL("/api/deals", window.location.origin);
+  url.searchParams.set("limit", "100");
+  const response = await fetch(url, signal ? { signal } : {});
+  return DealListResponse.parse(await readJson(response, 200, "Deal list"));
+}
+
+export async function fetchDeal(id: string, signal?: AbortSignal): Promise<DealResponse> {
+  const response = await fetch(
+    new URL(`/api/deals/${encodeURIComponent(id)}`, window.location.origin),
+    signal ? { signal } : {},
+  );
+  if (response.status === 404) throw new NotFoundError("Deal not found");
+  return DealResponse.parse(await readJson(response, 200, "Deal"));
+}
+
+export async function createDeal(
+  request: CreateDealRequest,
+  csrfToken: string,
+): Promise<DealResponse> {
+  const response = await fetch(new URL("/api/deals", window.location.origin), {
+    method: "POST",
+    headers: { "content-type": "application/json", "x-csrf-token": csrfToken },
+    body: JSON.stringify(request),
+  });
+  if (response.status === 400) {
+    const parsed = ErrorResponse.safeParse(await response.json());
+    const known = parsed.success && parsed.data.error !== "Bad request";
+    throw new RefusedError(
+      known ? parsed.data.error : "The Deal was refused. Check the details and try again.",
+    );
+  }
+  return DealResponse.parse(await readJson(response, 201, "Create Deal"));
 }

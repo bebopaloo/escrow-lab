@@ -1,0 +1,323 @@
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { render, screen, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { delay, http, HttpResponse } from "msw";
+import { describe, expect, it } from "vitest";
+import { App } from "./App.tsx";
+import { server } from "./test-server.ts";
+
+const ALICE = {
+  id: "00000000-0000-4000-8000-000000000001",
+  displayName: "Alice Buyer",
+  role: "buyer",
+} as const;
+const CAROL = {
+  id: "00000000-0000-4000-8000-000000000003",
+  displayName: "Carol Seller",
+  role: "seller",
+} as const;
+const DEAL_ID = "11111111-1111-4111-8111-111111111111";
+
+const SUMMARY = {
+  id: DEAL_ID,
+  title: "Logo design",
+  buyerId: ALICE.id,
+  buyerName: ALICE.displayName,
+  sellerId: CAROL.id,
+  sellerName: CAROL.displayName,
+  totalMinor: 100_000,
+  currency: "GBP",
+  state: "draft",
+  createdAt: "2026-11-14T10:00:00.000Z",
+};
+const DETAIL = {
+  ...SUMMARY,
+  milestones: [
+    {
+      id: "22222222-2222-4222-8222-222222222221",
+      position: 1,
+      title: "Draft",
+      amountMinor: 40_000,
+      state: "pending",
+    },
+    {
+      id: "22222222-2222-4222-8222-222222222222",
+      position: 2,
+      title: "Final",
+      amountMinor: 60_000,
+      state: "pending",
+    },
+  ],
+};
+
+function renderApp() {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  render(
+    <QueryClientProvider client={client}>
+      <App />
+    </QueryClientProvider>,
+  );
+}
+
+function signedInAs(user: typeof ALICE | typeof CAROL, deals: unknown[] = [SUMMARY]) {
+  server.use(
+    http.get("*/api/health", () => HttpResponse.json({ status: "ok" })),
+    http.get("*/api/session", () => HttpResponse.json({ user, csrfToken: "token-1" })),
+    http.get("*/api/users", () => HttpResponse.json({ users: [ALICE, CAROL] })),
+    http.get("*/api/deals", () =>
+      HttpResponse.json({ deals, total: deals.length, limit: 20, offset: 0 }),
+    ),
+    http.get(`*/api/deals/${DEAL_ID}`, () => HttpResponse.json(DETAIL)),
+  );
+}
+
+describe("Deal list", () => {
+  it("lists the Deals with their state and total", async () => {
+    signedInAs(ALICE);
+    renderApp();
+    const row = await screen.findByRole("link", { name: /Logo design/ });
+    expect(row).toBeInTheDocument();
+    expect(screen.getByText(/£1,000\.00/)).toBeInTheDocument();
+    expect(screen.getByText(/draft/)).toBeInTheDocument();
+  });
+
+  it("shows the empty state", async () => {
+    signedInAs(ALICE, []);
+    renderApp();
+    expect(await screen.findByText("You have no Deals yet.")).toBeInTheDocument();
+  });
+
+  it("announces loading in a status region", async () => {
+    signedInAs(ALICE);
+    server.use(
+      http.get("*/api/deals", async () => {
+        await delay("infinite");
+        return HttpResponse.json({});
+      }),
+    );
+    renderApp();
+    expect(await screen.findByText("Loading the Deals.")).toHaveAttribute("role", "status");
+  });
+
+  it("shows an error when the list cannot load", async () => {
+    signedInAs(ALICE);
+    server.use(http.get("*/api/deals", () => new HttpResponse(null, { status: 500 })));
+    renderApp();
+    expect(await screen.findByRole("alert")).toHaveTextContent(/cannot be loaded/);
+  });
+
+  it("offers Create Deal to a Buyer", async () => {
+    signedInAs(ALICE);
+    renderApp();
+    expect(await screen.findByRole("button", { name: "Create a Deal" })).toBeVisible();
+  });
+
+  it("tells the person when there are more Deals than the list shows", async () => {
+    signedInAs(ALICE);
+    server.use(
+      http.get("*/api/deals", () =>
+        HttpResponse.json({ deals: [SUMMARY], total: 150, limit: 100, offset: 0 }),
+      ),
+    );
+    renderApp();
+    expect(await screen.findByText("This list shows 1 of 150 Deals.")).toBeVisible();
+  });
+
+  it("does not offer Create Deal to a Seller", async () => {
+    signedInAs(CAROL);
+    renderApp();
+    await screen.findByRole("link", { name: /Logo design/ });
+    expect(screen.queryByRole("button", { name: "Create a Deal" })).not.toBeInTheDocument();
+  });
+});
+
+describe("Deal detail", () => {
+  it("opens a Deal with its Milestones and moves focus to the heading", async () => {
+    signedInAs(ALICE);
+    renderApp();
+    await userEvent.click(await screen.findByRole("link", { name: /Logo design/ }));
+    const heading = await screen.findByRole("heading", { name: "Logo design" });
+    expect(heading).toHaveFocus();
+    const table = screen.getByRole("table");
+    expect(within(table).getByText("Draft")).toBeInTheDocument();
+    expect(within(table).getByText("£400.00")).toBeInTheDocument();
+    expect(within(table).getByText("£600.00")).toBeInTheDocument();
+  });
+
+  it("goes back to the list and moves focus to its heading", async () => {
+    signedInAs(ALICE);
+    renderApp();
+    await userEvent.click(await screen.findByRole("link", { name: /Logo design/ }));
+    await userEvent.click(await screen.findByRole("button", { name: "Back to the Deals" }));
+    expect(await screen.findByRole("heading", { name: "Deals" })).toHaveFocus();
+  });
+
+  it("tells the user when the Deal is not found", async () => {
+    signedInAs(ALICE);
+    server.use(
+      http.get(`*/api/deals/${DEAL_ID}`, () =>
+        HttpResponse.json({ error: "Not found", requestId: "r" }, { status: 404 }),
+      ),
+    );
+    renderApp();
+    await userEvent.click(await screen.findByRole("link", { name: /Logo design/ }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("This Deal was not found.");
+  });
+});
+
+describe("Create Deal", () => {
+  async function openForm() {
+    await userEvent.click(await screen.findByRole("button", { name: "Create a Deal" }));
+    return screen.findByRole("heading", { name: "Create a Deal" });
+  }
+
+  it("moves focus to the heading of the form", async () => {
+    signedInAs(ALICE);
+    renderApp();
+    expect(await openForm()).toHaveFocus();
+  });
+
+  it("sends the Deal in minor units with the CSRF token and opens it", async () => {
+    signedInAs(ALICE);
+    let sent: { body: unknown; token: string | null } | undefined;
+    server.use(
+      http.post("*/api/deals", async ({ request }) => {
+        sent = { body: await request.json(), token: request.headers.get("x-csrf-token") };
+        return HttpResponse.json(DETAIL, { status: 201 });
+      }),
+    );
+    renderApp();
+    await openForm();
+    await userEvent.selectOptions(await screen.findByLabelText("Seller"), CAROL.id);
+    await userEvent.type(screen.getByLabelText("Deal title"), "Logo design");
+    await userEvent.type(screen.getByLabelText("Total (£)"), "1000");
+    await userEvent.type(screen.getByLabelText("Milestone 1 title"), "Draft");
+    await userEvent.type(screen.getByLabelText("Milestone 1 amount (£)"), "400");
+    await userEvent.click(screen.getByRole("button", { name: "Add a Milestone" }));
+    await userEvent.type(screen.getByLabelText("Milestone 2 title"), "Final");
+    await userEvent.type(screen.getByLabelText("Milestone 2 amount (£)"), "600.00");
+    await userEvent.click(screen.getByRole("button", { name: "Create the Deal" }));
+    expect(await screen.findByRole("heading", { name: "Logo design" })).toHaveFocus();
+    expect(sent).toEqual({
+      token: "token-1",
+      body: {
+        sellerId: CAROL.id,
+        title: "Logo design",
+        totalMinor: 100_000,
+        milestones: [
+          { title: "Draft", amountMinor: 40_000 },
+          { title: "Final", amountMinor: 60_000 },
+        ],
+      },
+    });
+  });
+
+  it("shows the refusal when the Milestones do not add up", async () => {
+    signedInAs(ALICE);
+    server.use(
+      http.post("*/api/deals", () =>
+        HttpResponse.json(
+          { error: "The Milestones must add up to the total.", requestId: "r" },
+          { status: 400 },
+        ),
+      ),
+    );
+    renderApp();
+    await openForm();
+    await userEvent.selectOptions(await screen.findByLabelText("Seller"), CAROL.id);
+    await userEvent.type(screen.getByLabelText("Deal title"), "Logo design");
+    await userEvent.type(screen.getByLabelText("Total (£)"), "1000");
+    await userEvent.type(screen.getByLabelText("Milestone 1 title"), "Draft");
+    await userEvent.type(screen.getByLabelText("Milestone 1 amount (£)"), "400");
+    await userEvent.click(screen.getByRole("button", { name: "Create the Deal" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "The Milestones must add up to the total.",
+    );
+  });
+
+  it("disables the submit button while the request runs", async () => {
+    signedInAs(ALICE);
+    server.use(
+      http.post("*/api/deals", async () => {
+        await delay("infinite");
+        return HttpResponse.json(DETAIL, { status: 201 });
+      }),
+    );
+    renderApp();
+    await openForm();
+    await userEvent.selectOptions(await screen.findByLabelText("Seller"), CAROL.id);
+    await userEvent.type(screen.getByLabelText("Deal title"), "Logo design");
+    await userEvent.type(screen.getByLabelText("Total (£)"), "10");
+    await userEvent.type(screen.getByLabelText("Milestone 1 title"), "All");
+    await userEvent.type(screen.getByLabelText("Milestone 1 amount (£)"), "10");
+    await userEvent.click(screen.getByRole("button", { name: "Create the Deal" }));
+    expect(await screen.findByRole("button", { name: "Create the Deal" })).toBeDisabled();
+  });
+
+  it("refuses an amount that is not money before it sends anything", async () => {
+    signedInAs(ALICE);
+    renderApp();
+    await openForm();
+    await userEvent.selectOptions(await screen.findByLabelText("Seller"), CAROL.id);
+    await userEvent.type(screen.getByLabelText("Deal title"), "Logo design");
+    await userEvent.type(screen.getByLabelText("Total (£)"), "abc");
+    await userEvent.type(screen.getByLabelText("Milestone 1 title"), "All");
+    await userEvent.type(screen.getByLabelText("Milestone 1 amount (£)"), "10");
+    await userEvent.click(screen.getByRole("button", { name: "Create the Deal" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent(/pounds and pence/);
+  });
+
+  it("limits a Deal to 10 Milestones", async () => {
+    signedInAs(ALICE);
+    renderApp();
+    await openForm();
+    for (let i = 0; i < 9; i += 1) {
+      await userEvent.click(screen.getByRole("button", { name: "Add a Milestone" }));
+    }
+    expect(screen.getByRole("button", { name: "Add a Milestone" })).toBeDisabled();
+  });
+  it("moves focus to the title of a new Milestone, also after the 10th", async () => {
+    signedInAs(ALICE);
+    renderApp();
+    await openForm();
+    await userEvent.click(screen.getByRole("button", { name: "Add a Milestone" }));
+    expect(screen.getByLabelText("Milestone 2 title")).toHaveFocus();
+    for (let i = 0; i < 8; i += 1) {
+      await userEvent.click(screen.getByRole("button", { name: "Add a Milestone" }));
+    }
+    expect(screen.getByRole("button", { name: "Add a Milestone" })).toBeDisabled();
+    expect(screen.getByLabelText("Milestone 10 title")).toHaveFocus();
+  });
+
+  it("moves focus to the nearest Milestone title after a removal", async () => {
+    signedInAs(ALICE);
+    renderApp();
+    await openForm();
+    await userEvent.click(screen.getByRole("button", { name: "Add a Milestone" }));
+    await userEvent.click(screen.getByRole("button", { name: "Add a Milestone" }));
+    await userEvent.click(screen.getByRole("button", { name: "Remove Milestone 2" }));
+    expect(screen.getByLabelText("Milestone 2 title")).toHaveFocus();
+    await userEvent.click(screen.getByRole("button", { name: "Remove Milestone 2" }));
+    expect(screen.getByLabelText("Milestone 1 title")).toHaveFocus();
+  });
+
+  it("links the form error to each amount that fails", async () => {
+    signedInAs(ALICE);
+    renderApp();
+    await openForm();
+    await userEvent.selectOptions(await screen.findByLabelText("Seller"), CAROL.id);
+    await userEvent.type(screen.getByLabelText("Deal title"), "Logo design");
+    await userEvent.type(screen.getByLabelText("Total (£)"), "abc");
+    await userEvent.type(screen.getByLabelText("Milestone 1 title"), "All");
+    await userEvent.type(screen.getByLabelText("Milestone 1 amount (£)"), "10");
+    await userEvent.click(screen.getByRole("button", { name: "Create the Deal" }));
+    const alert = await screen.findByRole("alert");
+    const total = screen.getByLabelText("Total (£)");
+    expect(total).toHaveAttribute("aria-invalid", "true");
+    expect(total.getAttribute("aria-describedby")).toContain(alert.id);
+    expect(alert.id).not.toBe("");
+    const amount = screen.getByLabelText("Milestone 1 amount (£)");
+    expect(amount).not.toHaveAttribute("aria-invalid", "true");
+    expect(amount.getAttribute("aria-describedby")).not.toContain(alert.id);
+  });
+});

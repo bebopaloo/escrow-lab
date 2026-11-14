@@ -8,3 +8,4 @@ export const HealthResponse = z
 
 export type HealthResponse = z.infer<typeof HealthResponse>;
 export * from "./identity.ts";
+export * from "./deals.ts";

@@ -11,6 +11,7 @@ import {
   type ZodTypeProvider,
 } from "fastify-type-provider-zod";
 import type { Config } from "./config.ts";
+import { dealRoutes } from "./modules/deals/index.ts";
 import { identityRoutes } from "./modules/identity/index.ts";
 import { healthRoutes } from "./routes/health.ts";
 
@@ -80,6 +81,7 @@ export async function buildApp({ config, db, logger }: AppOptions) {
 
   await app.register(healthRoutes, { prefix: "/api", db });
   await app.register(identityRoutes, { prefix: "/api", db });
+  await app.register(dealRoutes, { prefix: "/api", db });
 
   return app;
 }

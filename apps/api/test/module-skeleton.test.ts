@@ -1,9 +1,7 @@
 import { describe, expect, it } from "vitest";
 
-// `identity` and `audit` have code now, so they are not in this list.
-const paths = ["payout", "approval", "ledger", "deals", "milestones"].map(
-  (name) => `../src/modules/${name}/index.ts`,
-);
+// `identity`, `audit`, `deals` and `milestones` have code now, so they are not in this list.
+const paths = ["payout", "approval", "ledger"].map((name) => `../src/modules/${name}/index.ts`);
 
 describe("module skeleton", () => {
   it.each(paths)("%s exports nothing", async (path) => {
