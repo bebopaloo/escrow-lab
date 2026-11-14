@@ -1,0 +1,97 @@
+# Factory controls (ADR 0014): the Risk tier, the Security section and the traceability
+# of each pull request.
+# context-init writes this file to .github/workflows/controls.yml, and copies the factory's
+# control scripts into .factory/kit/. The scripts need only the Python 3.12 of the runner.
+name: Factory controls
+
+on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened, labeled]
+
+permissions:
+  contents: read
+  issues: read
+
+concurrency:
+  group: controls-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  tier-and-sections:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      # Text from the pull request reaches the scripts only through env, never inside `run`.
+      - name: Risk tier
+        id: tier
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          LABELS: ${{ toJson(github.event.pull_request.labels.*.name) }}
+        run: |
+          label=$(printf '%s' "$LABELS" | jq -r '["authority","sensitive","general","inert"] as $order
+            | [.[] | select(startswith("risk:")) | ltrimstr("risk:") | select(IN($order[]))]
+            | sort_by(. as $t | $order | index($t)) | .[0] // empty')
+          python3 .factory/kit/scripts/risk_tier.py classify --repo . --base "$BASE_SHA" ${label:+--label-tier "$label"} > tier.json
+          cat tier.json
+          if jq -e 'has("skipped")' tier.json > /dev/null; then
+            echo "tier=off" >> "$GITHUB_OUTPUT"
+            echo "Risk tiers are off in this repo." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          echo "tier=$(jq -r .tier tier.json)" >> "$GITHUB_OUTPUT"
+          {
+            echo "### Risk tier: $(jq -r .tier tier.json)"
+            echo
+            jq -r '.reasons[] | "- `\(.path)` (\(.rule))"' tier.json
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: Security section
+        if: steps.tier.outputs.tier != 'off'
+        env:
+          TIER: ${{ steps.tier.outputs.tier }}
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: |
+          printf '%s' "$PR_BODY" > body.md
+          python3 .factory/kit/scripts/pr_sections.py check --repo . --tier "$TIER" --body-file body.md
+      # Each new direct dependency is named in the Security section (module dependency_control).
+      # The script skips when the module is off.
+      - name: New dependencies
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: |
+          printf '%s' "$PR_BODY" > body.md
+          python3 .factory/kit/scripts/dependencies.py check --repo . --base "$BASE_SHA" --body-file body.md
+      # The work item and its Spec (module traceability). The labels of the issue and of its
+      # parent come from the GitHub GraphQL API; the script skips when the module is off.
+      - name: Traceability
+        env:
+          TIER: ${{ steps.tier.outputs.tier }}
+          PR_BODY: ${{ github.event.pull_request.body }}
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          printf '%s' "$PR_BODY" > body.md
+          tier="$TIER"
+          if [ "$tier" = "off" ] || [ -z "$tier" ]; then tier=general; fi
+          issue=$(python3 .factory/kit/scripts/traceability.py issue --body-file body.md)
+          if [ -n "$issue" ]; then
+            gh api graphql -F number="$issue" -f owner="${REPO%%/*}" -f name="${REPO#*/}" -f query='
+              query($owner: String!, $name: String!, $number: Int!) {
+                repository(owner: $owner, name: $name) {
+                  issue(number: $number) {
+                    labels(first: 50) { nodes { name } }
+                    parent { labels(first: 50) { nodes { name } } }
+                  }
+                }
+              }' | jq '.data.repository.issue | {
+                issue: [.labels.nodes[].name],
+                parent: (if .parent then [.parent.labels.nodes[].name] else null end)
+              }' > labels.json
+            python3 .factory/kit/scripts/traceability.py check --repo . --tier "$tier" --body-file body.md --labels-file labels.json
+          else
+            python3 .factory/kit/scripts/traceability.py check --repo . --tier "$tier" --body-file body.md
+          fi

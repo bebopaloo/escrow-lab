@@ -26,7 +26,13 @@
       "Bash(gh repo edit *)",
       "Bash(gh repo delete *)",
       "Edit(./.github/workflows/**)",
-      "Edit(./.claude/factory.json)"
+      "Edit(./.claude/factory.json)",
+      "Bash(git push origin production)",
+      "Bash(git push origin production *)",
+      "Bash(git push origin HEAD:production*)",
+      "Bash(gh workflow run *)",
+      "Edit(./_context/controls/waivers.toml)",
+      "Edit(./_context/controls/risk-map.toml)"
     ]
   }
 }
