@@ -1,6 +1,7 @@
 import { useRef } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { fetchDeal, fundDeal, NotFoundError, PaymentFailedError } from "./api.ts";
+import { MilestoneEvidence } from "./MilestoneEvidence.tsx";
 import { formatMoney } from "./money.ts";
 
 export interface DealDetailProps {
@@ -31,6 +32,13 @@ export function DealDetail({ id, userId, role, csrfToken, onBack }: DealDetailPr
   });
 
   const canFund = role === "buyer" && deal.data?.buyerId === userId && deal.data.state === "draft";
+
+  const isParticipant =
+    role === "buyer" ? deal.data?.buyerId === userId : deal.data?.sellerId === userId;
+  const openMilestone =
+    deal.data?.state === "funded" && isParticipant
+      ? deal.data.milestones.find((m) => m.state !== "pending" && m.state !== "paid")
+      : undefined;
 
   return (
     <section aria-labelledby="deal-heading">
@@ -98,6 +106,15 @@ export function DealDetail({ id, userId, role, csrfToken, onBack }: DealDetailPr
               ))}
             </tbody>
           </table>
+          {openMilestone !== undefined && (
+            <MilestoneEvidence
+              key={openMilestone.id}
+              dealId={id}
+              milestone={openMilestone}
+              role={role}
+              csrfToken={csrfToken}
+            />
+          )}
         </>
       )}
     </section>

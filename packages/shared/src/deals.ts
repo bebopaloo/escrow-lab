@@ -43,6 +43,8 @@ export const MilestoneResponse = z
     title: z.string(),
     amountMinor: z.number().int(),
     state: MilestoneState,
+    evidenceText: z.string().nullable(),
+    rejectionReason: z.string().nullable(),
   })
   .strict();
 export type MilestoneResponse = z.infer<typeof MilestoneResponse>;
@@ -90,3 +92,23 @@ export const DealIdParams = z.object({ id: z.uuid() }).strict();
 
 export const PAYMENT_FAILED = "The payment failed. Try again.";
 export const WRONG_DEAL_STATE = "The Deal is not in the right state for this action.";
+
+export const MAX_EVIDENCE_LENGTH = 2000;
+export const MAX_REJECTION_REASON_LENGTH = 500;
+
+export const MilestoneIdParams = z.object({ id: z.uuid() }).strict();
+
+export const SendEvidenceRequest = z
+  .object({ evidenceText: z.string().trim().min(1).max(MAX_EVIDENCE_LENGTH) })
+  .strict();
+export type SendEvidenceRequest = z.infer<typeof SendEvidenceRequest>;
+
+export const RejectEvidenceRequest = z
+  .object({ reason: z.string().trim().min(1).max(MAX_REJECTION_REASON_LENGTH) })
+  .strict();
+export type RejectEvidenceRequest = z.infer<typeof RejectEvidenceRequest>;
+
+/** The body of an accept request: no fields. */
+export const AcceptEvidenceRequest = z.object({}).strict();
+
+export const WRONG_MILESTONE_STATE = "The Milestone is not in the right state for this action.";
