@@ -46,6 +46,9 @@ const baseURL = previewURL ?? devURL;
 export default defineConfig({
   testDir: "./e2e",
   forbidOnly: ci,
+  // The specs share the seeded users. A sign-out voids every session of its user, so two specs
+  // that use one user must not run at the same time.
+  workers: 1,
   retries: ci ? 1 : 0,
   reporter: ci ? [["github"], ["html", { open: "never" }]] : "list",
   use: { baseURL, trace: "on-first-retry" },
