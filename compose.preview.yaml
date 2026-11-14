@@ -1,6 +1,7 @@
 # A production-like preview of the current checkout, on this machine only.
 # Start it with the stack-ts `preview` skill, or:
-#   PREVIEW_PORT=41080 docker compose -f compose.preview.yaml -p <name> up -d --build --wait
+#   PREVIEW_PORT=41080 SESSION_KEY=$(openssl rand -hex 32) docker compose -f compose.preview.yaml -p <name> up -d --build --wait
+# scripts/deploy.sh starts the same stack as the stand-in dev and production of the release pilot.
 # The database has no host port, and the web port binds to 127.0.0.1. The API
 # port 3000 and the Caddy port 80 stay inside the Compose network.
 # The database accepts connections without a password (trust) and only the
@@ -34,6 +35,8 @@ services:
       HOST: 0.0.0.0
       PORT: "3000"
       CORS_ORIGINS: http://127.0.0.1:${PREVIEW_PORT:-41080}
+      # The session cookie key: 64 hex characters. scripts/deploy.sh makes one per deploy.
+      SESSION_KEY: ${SESSION_KEY:?set SESSION_KEY to 64 hex characters, for example with openssl rand -hex 32}
     depends_on:
       migrate: { condition: service_completed_successfully }
     healthcheck:
