@@ -1,0 +1,25 @@
+{
+  "factory_core_version": "0.9.0",
+  "identity": "app",
+  "operator": "mskai23",
+  "engagement_mode": "solo",
+  "forge": "factory-github",
+  "tracker": "factory-tracker-github",
+  "main_branch": "main",
+  "trusted_authors": [],
+  "rules": [
+    "coding",
+    "security",
+    "testing",
+    "fastify-api",
+    "postgres-drizzle",
+    "react",
+    "testing-ts",
+    "typescript"
+  ],
+  "compliance": [],
+  "stack_pack": {
+    "name": "stack-ts",
+    "version": "0.8.0"
+  }
+}
