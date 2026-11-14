@@ -23,6 +23,11 @@ export function DealList({ canCreate, onOpen, onCreate }: DealListProps) {
       )}
       {deals.isPending && <p role="status">Loading the Deals.</p>}
       {deals.isError && <p role="alert">The Deals cannot be loaded. Reload this page.</p>}
+      {deals.data && deals.data.total > deals.data.deals.length && (
+        <p role="status">
+          This list shows {deals.data.deals.length} of {deals.data.total} Deals.
+        </p>
+      )}
       {deals.data?.deals.length === 0 && <p>You have no Deals yet.</p>}
       {deals.data && deals.data.deals.length > 0 && (
         <ul>

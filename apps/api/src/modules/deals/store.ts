@@ -2,6 +2,7 @@ import { schema, type Database } from "@escrow-lab/db";
 import type { CreateDealRequest, DealResponse, DealSummary } from "@escrow-lab/shared";
 import { and, count, desc, eq, or } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
+import { recordAuditEvent } from "../audit/index.ts";
 import { insertMilestones, listMilestones } from "../milestones/index.ts";
 
 const buyers = alias(schema.users, "buyers");
@@ -40,7 +41,7 @@ export async function isSeller(db: Database, userId: string): Promise<boolean> {
   return row !== undefined;
 }
 
-/** Writes the Deal and its Milestones in one transaction. The Deal starts in `draft`. */
+/** Writes the Deal, its Milestones and the `create_deal` audit event in one transaction. The Deal starts in `draft`. */
 export async function createDeal(
   db: Database,
   buyerId: string,
@@ -59,6 +60,7 @@ export async function createDeal(
       .returning({ id: schema.deals.id });
     if (deal === undefined) throw new Error("The Deal was not saved");
     await insertMilestones(tx, deal.id, request.milestones);
+    await recordAuditEvent(tx, { userId: buyerId, action: "create_deal", dealId: deal.id });
     return deal.id;
   });
 }

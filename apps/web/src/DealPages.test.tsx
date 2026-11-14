@@ -106,10 +106,21 @@ describe("Deal list", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent(/cannot be loaded/);
   });
 
-  it("offers Create Deal to a Buyer and not to a Seller", async () => {
+  it("offers Create Deal to a Buyer", async () => {
     signedInAs(ALICE);
     renderApp();
     expect(await screen.findByRole("button", { name: "Create a Deal" })).toBeVisible();
+  });
+
+  it("tells the person when there are more Deals than the list shows", async () => {
+    signedInAs(ALICE);
+    server.use(
+      http.get("*/api/deals", () =>
+        HttpResponse.json({ deals: [SUMMARY], total: 150, limit: 100, offset: 0 }),
+      ),
+    );
+    renderApp();
+    expect(await screen.findByText("This list shows 1 of 150 Deals.")).toBeVisible();
   });
 
   it("does not offer Create Deal to a Seller", async () => {
@@ -264,5 +275,36 @@ describe("Create Deal", () => {
       await userEvent.click(screen.getByRole("button", { name: "Add a Milestone" }));
     }
     expect(screen.getByRole("button", { name: "Add a Milestone" })).toBeDisabled();
+  });
+  it("moves focus to the nearest Milestone title after a removal", async () => {
+    signedInAs(ALICE);
+    renderApp();
+    await openForm();
+    await userEvent.click(screen.getByRole("button", { name: "Add a Milestone" }));
+    await userEvent.click(screen.getByRole("button", { name: "Add a Milestone" }));
+    await userEvent.click(screen.getByRole("button", { name: "Remove Milestone 2" }));
+    expect(screen.getByLabelText("Milestone 2 title")).toHaveFocus();
+    await userEvent.click(screen.getByRole("button", { name: "Remove Milestone 2" }));
+    expect(screen.getByLabelText("Milestone 1 title")).toHaveFocus();
+  });
+
+  it("links the form error to each amount that fails", async () => {
+    signedInAs(ALICE);
+    renderApp();
+    await openForm();
+    await userEvent.selectOptions(await screen.findByLabelText("Seller"), CAROL.id);
+    await userEvent.type(screen.getByLabelText("Deal title"), "Logo design");
+    await userEvent.type(screen.getByLabelText("Total (£)"), "abc");
+    await userEvent.type(screen.getByLabelText("Milestone 1 title"), "All");
+    await userEvent.type(screen.getByLabelText("Milestone 1 amount (£)"), "10");
+    await userEvent.click(screen.getByRole("button", { name: "Create the Deal" }));
+    const alert = await screen.findByRole("alert");
+    const total = screen.getByLabelText("Total (£)");
+    expect(total).toHaveAttribute("aria-invalid", "true");
+    expect(total.getAttribute("aria-describedby")).toContain(alert.id);
+    expect(alert.id).not.toBe("");
+    const amount = screen.getByLabelText("Milestone 1 amount (£)");
+    expect(amount).not.toHaveAttribute("aria-invalid", "true");
+    expect(amount.getAttribute("aria-describedby")).not.toContain(alert.id);
   });
 });

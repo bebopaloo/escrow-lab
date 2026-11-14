@@ -1,4 +1,4 @@
-import { useState, type SubmitEvent } from "react";
+import { useEffect, useRef, useState, type SubmitEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { MAX_MILESTONES, type CreateDealRequest, type DealResponse } from "@escrow-lab/shared";
 import { createDeal, fetchUsers } from "./api.ts";
@@ -15,7 +15,12 @@ interface MilestoneInput {
   amount: string;
 }
 
+const ERROR_ID = "deal-form-error";
 const AMOUNT_HELP = "Enter amounts in pounds and pence, for example 400 or 400.50.";
+
+function describedBy(failing: boolean): string {
+  return failing ? `deal-amount-help ${ERROR_ID}` : "deal-amount-help";
+}
 
 export function CreateDeal({ csrfToken, onCreated, onCancel }: CreateDealProps) {
   const client = useQueryClient();
@@ -25,6 +30,15 @@ export function CreateDeal({ csrfToken, onCreated, onCancel }: CreateDealProps) 
   const [total, setTotal] = useState("");
   const [milestones, setMilestones] = useState<MilestoneInput[]>([{ title: "", amount: "" }]);
   const [formError, setFormError] = useState<string | null>(null);
+  const [badTotal, setBadTotal] = useState(false);
+  const [badAmounts, setBadAmounts] = useState<boolean[]>([]);
+  const focusAfterRemoval = useRef<number | null>(null);
+
+  useEffect(() => {
+    if (focusAfterRemoval.current === null) return;
+    document.getElementById(`milestone-title-${focusAfterRemoval.current.toString()}`)?.focus();
+    focusAfterRemoval.current = null;
+  }, [milestones]);
 
   const mutation = useMutation({
     mutationFn: (request: CreateDealRequest) => createDeal(request, csrfToken),
@@ -49,9 +63,13 @@ export function CreateDeal({ csrfToken, onCreated, onCancel }: CreateDealProps) 
       amountMinor: parsePounds(item.amount),
     }));
     if (totalMinor === null || parsed.some((item) => item.amountMinor === null)) {
+      setBadTotal(totalMinor === null);
+      setBadAmounts(parsed.map((item) => item.amountMinor === null));
       setFormError(AMOUNT_HELP);
       return;
     }
+    setBadTotal(false);
+    setBadAmounts([]);
     setFormError(null);
     mutation.mutate({
       sellerId,
@@ -108,7 +126,8 @@ export function CreateDeal({ csrfToken, onCreated, onCancel }: CreateDealProps) 
             id="deal-total"
             required
             inputMode="decimal"
-            aria-describedby="deal-amount-help"
+            aria-invalid={badTotal && formError !== null ? true : undefined}
+            aria-describedby={describedBy(badTotal && formError !== null)}
             value={total}
             onChange={(event) => {
               setTotal(event.target.value);
@@ -139,7 +158,8 @@ export function CreateDeal({ csrfToken, onCreated, onCancel }: CreateDealProps) 
                 id={`milestone-amount-${index.toString()}`}
                 required
                 inputMode="decimal"
-                aria-describedby="deal-amount-help"
+                aria-invalid={badAmounts[index] === true && formError !== null ? true : undefined}
+                aria-describedby={describedBy(badAmounts[index] === true && formError !== null)}
                 value={item.amount}
                 onChange={(event) => {
                   update(index, { amount: event.target.value });
@@ -149,6 +169,7 @@ export function CreateDeal({ csrfToken, onCreated, onCancel }: CreateDealProps) 
                 <button
                   type="button"
                   onClick={() => {
+                    focusAfterRemoval.current = Math.min(index, milestones.length - 2);
                     setMilestones((current) => current.filter((_, position) => position !== index));
                   }}
                 >
@@ -167,7 +188,11 @@ export function CreateDeal({ csrfToken, onCreated, onCancel }: CreateDealProps) 
             Add a Milestone
           </button>
         </fieldset>
-        {error !== null && <p role="alert">{error}</p>}
+        {error !== null && (
+          <p id={ERROR_ID} role="alert">
+            {error}
+          </p>
+        )}
         <button type="submit" disabled={mutation.isPending}>
           Create the Deal
         </button>{" "}

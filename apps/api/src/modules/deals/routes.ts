@@ -11,9 +11,10 @@ import {
 } from "@escrow-lab/shared";
 import type { preHandlerHookHandler } from "fastify";
 import type { FastifyPluginCallbackZod } from "fastify-type-provider-zod";
-import { recordAuditEvent } from "../audit/index.ts";
 import { requireRole } from "../identity/index.ts";
 import { createDeal, findDeal, isSeller, listDeals } from "./store.ts";
+
+const CREATE_DEAL_LIMIT = 30;
 
 export interface DealsOptions {
   db: Database;
@@ -57,6 +58,7 @@ export const dealRoutes: FastifyPluginCallbackZod<DealsOptions> = (app, { db }, 
     "/deals",
     {
       // The role check comes first, so a Seller gets 403 before the CSRF check.
+      config: { rateLimit: { max: CREATE_DEAL_LIMIT, timeWindow: "1 minute" } },
       onRequest: [requireRole(db, "buyer"), csrf],
       schema: {
         body: CreateDealRequest,
@@ -74,7 +76,6 @@ export const dealRoutes: FastifyPluginCallbackZod<DealsOptions> = (app, { db }, 
         return reply.status(400).send({ error: SELLER_MUST_BE_SELLER, requestId: request.id });
       }
       const dealId = await createDeal(db, buyerId, body);
-      await recordAuditEvent(db, { userId: buyerId, action: "create_deal", dealId });
       const deal = await findDeal(db, buyerId, dealId);
       if (deal === undefined) throw new Error("The new Deal cannot be read");
       return reply.status(201).send(deal);
