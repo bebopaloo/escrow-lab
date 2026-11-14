@@ -309,6 +309,119 @@ describe("retry a Deal's funding", () => {
     expect(t.chargeKeys).toHaveLength(6);
   });
 
+  it("leaves a Deal alone when it left funding during a failing try, and writes no audit event", async () => {
+    const t = await begin([{ kind: "lose_reply" }]);
+    const dealId = await t.fundNewDeal();
+    // One more failure would end the Deal in funding_failed, so a missing guard shows.
+    await database.db
+      .update(schema.deals)
+      .set({ fundingAttempts: 4, nextFundingTryAt: null })
+      .where(eq(schema.deals.id, dealId));
+    expect((await dealRow(dealId))?.state).toBe("funding");
+    const auditBefore = await auditActions(dealId);
+    const stale: Chain = {
+      lock: async () => {
+        // The Deal becomes funded while this try runs.
+        await database.db
+          .update(schema.deals)
+          .set({ state: "funded" })
+          .where(eq(schema.deals.id, dealId));
+        return { ok: false, failure: "timeout" };
+      },
+      transfer: (seller, amount, k) => t.chain.transfer(seller, amount, k),
+    };
+    const job = createFundingRetryJob({
+      db: database.db,
+      chain: stale,
+      paymentRail: createFakePaymentRail([]),
+      now: () => new Date(t.now()),
+    });
+    await job.runOnce({ dealIds: [dealId] });
+    const row = await dealRow(dealId);
+    expect(row?.state).toBe("funded");
+    expect(row?.fundingAttempts).toBe(4);
+    expect(await auditActions(dealId)).toEqual(auditBefore);
+  });
+
+  it("leaves a Deal alone when its key changed during a failing try", async () => {
+    const t = await begin([{ kind: "lose_reply" }]);
+    const dealId = await t.fundNewDeal();
+    await database.db
+      .update(schema.deals)
+      .set({ fundingAttempts: 4, nextFundingTryAt: null })
+      .where(eq(schema.deals.id, dealId));
+    expect((await dealRow(dealId))?.state).toBe("funding");
+    const auditBefore = await auditActions(dealId);
+    const stale: Chain = {
+      lock: async () => {
+        await database.db
+          .update(schema.deals)
+          .set({ fundingIdempotencyKey: "another-key" })
+          .where(eq(schema.deals.id, dealId));
+        return { ok: false, failure: "timeout" };
+      },
+      transfer: (seller, amount, k) => t.chain.transfer(seller, amount, k),
+    };
+    const job = createFundingRetryJob({
+      db: database.db,
+      chain: stale,
+      paymentRail: createFakePaymentRail([]),
+      now: () => new Date(t.now()),
+    });
+    await job.runOnce({ dealIds: [dealId] });
+    const row = await dealRow(dealId);
+    expect(row?.state).toBe("funding");
+    expect(row?.fundingAttempts).toBe(4);
+    expect(await auditActions(dealId)).toEqual(auditBefore);
+  });
+
+  it("passes the error of a timed run that throws to onError, and the next timed run still tries the Deal", async () => {
+    const t = await begin([{ kind: "lose_reply" }]);
+    const dealId = await t.fundNewDeal();
+    const key = (await dealRow(dealId))?.fundingIdempotencyKey;
+    const boom = new Error("partner down");
+    const keys: string[] = [];
+    let threw = false;
+    const flaky: PaymentRail = {
+      charge: async (buyer, amount, k) => {
+        if (k === key) {
+          keys.push(k);
+          if (!threw) {
+            threw = true;
+            throw boom;
+          }
+        }
+        return t.rail.charge(buyer, amount, k);
+      },
+    };
+    const errors: unknown[] = [];
+    const job = createFundingRetryJob({
+      db: database.db,
+      chain: t.chain,
+      paymentRail: flaky,
+      now: () => new Date(t.now()),
+      onError: (error) => errors.push(error),
+    });
+    vi.useFakeTimers({ toFake: ["setInterval", "clearInterval"] });
+    t.advance(60_000);
+    job.start();
+    await vi.advanceTimersByTimeAsync(30_000);
+    await vi.waitFor(() => {
+      expect(errors).toEqual([boom]);
+    });
+    // The lease holds the Deal for 30 seconds, so the clock moves past it.
+    t.advance(60_000);
+    await vi.advanceTimersByTimeAsync(30_000);
+    await vi.waitFor(() => {
+      expect(keys).toHaveLength(2);
+    });
+    job.stop();
+    await vi.waitFor(async () => {
+      expect((await dealRow(dealId))?.state).toBe("funded");
+    });
+    expect(errors).toEqual([boom]);
+  });
+
   it("runs every 30 seconds after start and stops after stop", async () => {
     // The script is long, so other Deals in the shared database do not use it up.
     const t = await begin(
