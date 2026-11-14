@@ -78,6 +78,7 @@ describe("App", () => {
     await userEvent.click(await screen.findByRole("button", { name: /Alice Buyer/ }));
     expect(await screen.findByRole("heading", { name: "Deals" })).toBeInTheDocument();
     expect(sent).toEqual({ body: { userId: USERS[0].id }, token: "token-1" });
+    expect(screen.getByRole("heading", { name: "Deals" })).toHaveFocus();
   });
 
   it.each([
@@ -126,5 +127,6 @@ describe("App", () => {
     await userEvent.click(await screen.findByRole("button", { name: "Sign out" }));
     expect(await screen.findByRole("heading", { name: "Sign in" })).toBeInTheDocument();
     expect(token).toBe("token-1");
+    expect(screen.getByRole("heading", { name: "Sign in" })).toHaveFocus();
   });
 });

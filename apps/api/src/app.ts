@@ -28,6 +28,7 @@ export interface AppOptions {
 }
 
 const SESSION_MAX_AGE_SECONDS = 8 * 60 * 60;
+const SESSION_COOKIE_NAME = "__Host-session";
 
 const REDACTED_KEYS = ["req.headers.authorization", "req.headers.cookie", "*.password", "*.token"];
 
@@ -55,6 +56,9 @@ export async function buildApp({ config, db, logger }: AppOptions) {
   await app.register(cors, { origin: config.CORS_ORIGINS });
   await app.register(secureSession, {
     key: Buffer.from(config.SESSION_KEY, "hex"),
+    cookieName: SESSION_COOKIE_NAME,
+    // The server refuses a session older than the cookie lifetime, even with a copied cookie.
+    expiry: SESSION_MAX_AGE_SECONDS,
     cookie: {
       path: "/",
       httpOnly: true,

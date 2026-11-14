@@ -2,7 +2,7 @@ import { SEED_USERS, schema, seedUsers } from "@escrow-lab/db";
 import { SessionResponse } from "@escrow-lab/shared";
 import { and, eq } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import type { LightMyRequestResponse } from "fastify";
 import { buildApp } from "../src/app.ts";
 import { openTestDatabase, testConfig } from "./database.ts";
@@ -13,6 +13,10 @@ describe("sessions", () => {
   beforeAll(async () => {
     database = await openTestDatabase();
     await seedUsers(database.db);
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
   afterAll(async () => {
@@ -77,6 +81,32 @@ describe("sessions", () => {
     });
   });
 
+  describe("session cookie", () => {
+    it("uses the __Host- name and a path of /", async () => {
+      const app = await makeApp();
+      const response = await app.inject({ method: "GET", url: "/api/session" });
+      const [cookie] = response.cookies;
+      expect(cookie?.name).toBe("__Host-session");
+      expect(cookie?.path).toBe("/");
+      expect(cookie?.domain).toBeUndefined();
+      await app.close();
+    });
+
+    it("refuses a session older than 8 hours", async () => {
+      const app = await makeApp();
+      const { response } = await signInAs(app, SEED_USERS[0]?.id ?? "");
+      const cookie = cookieHeader(response);
+      const read = async () =>
+        SessionResponse.parse(
+          (await app.inject({ method: "GET", url: "/api/session", headers: { cookie } })).json(),
+        ).user;
+      expect(await read()).not.toBeNull();
+      vi.useFakeTimers({ toFake: ["Date"], now: Date.now() + (8 * 60 * 60 + 60) * 1000 });
+      expect(await read()).toBeNull();
+      await app.close();
+    });
+  });
+
   describe("POST /api/session", () => {
     it.each(SEED_USERS.filter((_, index) => index % 2 === 0))(
       "signs in as $role $displayName and writes one audit event",
@@ -116,6 +146,27 @@ describe("sessions", () => {
       }
       expect((await attempt()).statusCode).toBe(429);
       expect(await signInCount(userId)).toBe(before + 20);
+      await app.close();
+    });
+
+    it("rotates the CSRF secret, so the token from before sign-in stops working", async () => {
+      const app = await makeApp();
+      const { response, visitor } = await signInAs(app, SEED_USERS[0]?.id ?? "");
+      expect(response.statusCode).toBe(200);
+      const signedIn = cookieHeader(response);
+      const fresh = SessionResponse.parse(response.json()).csrfToken;
+      const old = await app.inject({
+        method: "DELETE",
+        url: "/api/session",
+        headers: { cookie: signedIn, "x-csrf-token": visitor.csrfToken },
+      });
+      expect(old.statusCode).toBe(403);
+      const current = await app.inject({
+        method: "DELETE",
+        url: "/api/session",
+        headers: { cookie: signedIn, "x-csrf-token": fresh },
+      });
+      expect(current.statusCode).toBe(204);
       await app.close();
     });
 

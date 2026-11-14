@@ -1,3 +1,4 @@
+import { useEffect, useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { fetchHealth, fetchSession } from "./api.ts";
 import { ApprovalQueue } from "./ApprovalQueue.tsx";
@@ -16,6 +17,17 @@ export function App() {
     queryFn: ({ signal }) => fetchSession(signal),
   });
 
+  // Move focus to the heading of the new view when the signed-in user changes (WCAG 2.4.3).
+  // The button that had focus unmounts, so focus would go to the body.
+  const signedIn = session.data === undefined ? undefined : session.data.user !== null;
+  const previous = useRef(signedIn);
+  useEffect(() => {
+    if (previous.current !== undefined && signedIn !== undefined && previous.current !== signedIn) {
+      document.querySelector<HTMLElement>("main h2")?.focus();
+    }
+    previous.current = signedIn;
+  }, [signedIn]);
+
   let message: string;
   if (health.isPending) {
     message = "Checking the API.";
@@ -33,7 +45,7 @@ export function App() {
       {session.data?.user === null && <SignIn csrfToken={session.data.csrfToken} />}
       {session.data?.user && (
         <>
-          <p>Signed in as {session.data.user.displayName}.</p>
+          <p role="status">Signed in as {session.data.user.displayName}.</p>
           {session.data.user.role === "approver" ? <ApprovalQueue /> : <DealList />}
           <SignOut csrfToken={session.data.csrfToken} />
         </>

@@ -13,7 +13,9 @@ export function SignIn({ csrfToken }: { csrfToken: string }) {
 
   return (
     <section aria-labelledby="sign-in-heading">
-      <h2 id="sign-in-heading">Sign in</h2>
+      <h2 id="sign-in-heading" tabIndex={-1}>
+        Sign in
+      </h2>
       {users.isPending && <p>Loading the users.</p>}
       {users.isError && <p role="alert">The users cannot be loaded. Reload this page.</p>}
       {mutation.isError && <p role="alert">Sign-in failed. Reload this page and try again.</p>}
