@@ -21,5 +21,23 @@
   "stack_pack": {
     "name": "stack-ts",
     "version": "0.8.0"
+  },
+  "controls": {
+    "profile": "regulated",
+    "modules": [
+      "risk_tiers",
+      "security_criteria",
+      "scanners",
+      "security_section",
+      "dependency_control",
+      "waivers",
+      "finding_lifecycle",
+      "control_register",
+      "threat_model",
+      "release_approval",
+      "traceability",
+      "release_record",
+      "control_events"
+    ]
   }
 }
