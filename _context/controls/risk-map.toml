@@ -1,0 +1,30 @@
+# Risk map (ADR 0014). Only a person changes this file.
+[[tier]]
+name = "authority"
+paths = [
+  "apps/api/src/modules/payout/**",
+  "apps/api/src/modules/approval/**",
+  "apps/api/src/modules/ledger/**",
+  "apps/api/src/adapters/chain/**",
+  "apps/api/src/adapters/payment-rail/**",
+]
+
+[[tier]]
+name = "sensitive"
+paths = [
+  "apps/api/src/modules/identity/**",
+  "apps/api/src/modules/audit/**",
+  "packages/db/migrations/**",
+]
+
+[[tier]]
+name = "general"
+paths = [
+  "apps/api/src/modules/deals/**",
+  "apps/api/src/modules/milestones/**",
+  "apps/web/**",
+]
+
+[[tier]]
+name = "inert"
+paths = ["**/*.md"]
