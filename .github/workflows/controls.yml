@@ -18,6 +18,10 @@ concurrency:
 
 jobs:
   tier-and-sections:
+    # A release pull request into production skips this job. Each pull request in the Release passed
+    # these controls, and the release has its own checks: release-approval and factory/release-review.
+    # It is the opposite of the condition in release-approval.yml.
+    if: github.event.pull_request.base.ref != 'production'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
