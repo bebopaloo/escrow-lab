@@ -15,31 +15,42 @@
 # `tests` lists the globs of the test files to scan. Leave it out to use the
 # defaults: *.test.ts(x), *.spec.ts(x), test_*.py, *_test.py, *_test.go.
 #
-# Example (remove the comment marks and edit):
-#
-# [[control]]
-# id = "CTRL-PAY-03"
-# title = "A release needs the buyer's recorded approval"
-# sources = ["PSRs 2017 reg 67"]
-# owner = "Operator"
-# modules = ["packages/payments/**"]
-#
-# [[control]]
-# id = "CTRL-REL-01"
-# title = "Code that no human reviewed never reaches production, client data or real money"
-# sources = ["ADR 0015"]
-# owner = "Operator"
-# modules = [".github/workflows/**"]
-# manual_checks = [
-#   "The release-separation check passes on every pull request into the main branch",
-#   "The production environment deploys only from the production branch, and holds the only production secrets",
-#   "Production and dev run in separate cloud accounts; the dev account holds only test-mode keys and synthetic data",
-# ]
-#
-# [[control]]
-# id = "CTRL-OPS-01"
-# title = "Backups restore within four hours"
-# sources = ["FCA SYSC 15A"]
-# owner = "Operator"
-# modules = ["infra/**"]
-# manual_checks = ["Quarterly restore rehearsal, recorded in the operations log"]
+[[control]]
+id = "CTRL-PAY-01"
+title = "No party to a Deal can authorise its Payout: only an Approver can"
+owner = "Operator"
+modules = ["apps/api/src/modules/approval/**", "apps/api/src/modules/payout/**"]
+
+[[control]]
+id = "CTRL-PAY-02"
+title = "A charge or a transfer happens at most once for each instruction"
+owner = "Operator"
+modules = [
+  "apps/api/src/modules/approval/**",
+  "apps/api/src/modules/payout/**",
+  "apps/api/src/modules/ledger/**",
+  "apps/api/src/adapters/**",
+]
+
+[[control]]
+id = "CTRL-LED-01"
+title = "No one can change or delete a ledger record"
+owner = "Operator"
+modules = ["apps/api/src/modules/ledger/**", "packages/db/migrations/**"]
+
+[[control]]
+id = "CTRL-AUD-01"
+title = "Each money or authority action records who did it and when"
+owner = "Operator"
+modules = ["apps/api/src/modules/audit/**", "apps/api/src/modules/approval/**", "apps/api/src/modules/payout/**"]
+
+[[control]]
+id = "CTRL-REL-01"
+title = "Only reviewed and approved code reaches production"
+sources = ["ADR 0015 of the factory"]
+owner = "Operator"
+modules = [".github/workflows/**"]
+manual_checks = [
+  "Only a release pull request that passed review-release and has the Operator's Release approval merges into production",
+  "Only deploy-production.yml uses the production environment; the release-separation check proves it on each pull request",
+]

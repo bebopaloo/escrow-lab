@@ -177,7 +177,7 @@ describe("Approve a Payout", () => {
   });
 
   describe("access control", () => {
-    it("gives a Buyer and a Seller 403, and nobody 401, and changes nothing", async () => {
+    it("[CTRL-PAY-01] gives a Buyer and a Seller 403, and nobody 401, and changes nothing", async () => {
       const { first } = await newDeal();
       expect((await approve(ALICE, first)).statusCode).toBe(403);
       expect((await approve(CAROL, first)).statusCode).toBe(403);
@@ -208,7 +208,7 @@ describe("Approve a Payout", () => {
       expect(response.statusCode).toBe(404);
     });
 
-    it("refuses an Approver who is the Buyer of the Deal", async () => {
+    it("[CTRL-PAY-01] refuses an Approver who is the Buyer of the Deal", async () => {
       const { dealId, first } = await newDeal();
       await database.db
         .update(schema.deals)
@@ -218,7 +218,7 @@ describe("Approve a Payout", () => {
       expect(await payouts(first)).toHaveLength(0);
     });
 
-    it("refuses an Approver who is the Seller of the Deal", async () => {
+    it("[CTRL-PAY-01] refuses an Approver who is the Seller of the Deal", async () => {
       const { dealId, first } = await newDeal();
       await database.db
         .update(schema.deals)
@@ -238,7 +238,7 @@ describe("Approve a Payout", () => {
       expect(await payouts(first)).toHaveLength(0);
     });
 
-    it("returns 409 for a second approval and pays once", async () => {
+    it("[CTRL-PAY-02] returns 409 for a second approval and pays once", async () => {
       const { dealId, first } = await newDeal();
       expect((await approve(ERIN, first)).statusCode).toBe(200);
       expect((await approve(ERIN, first)).statusCode).toBe(409);
@@ -246,7 +246,7 @@ describe("Approve a Payout", () => {
       expect(await payouts(first)).toHaveLength(1);
     });
 
-    it("lets only one of two approvals at the same time pass", async () => {
+    it("[CTRL-PAY-02] lets only one of two approvals at the same time pass", async () => {
       const { dealId, first } = await newDeal();
       const before = transfers.length;
       const results = await Promise.all([approve(ERIN, first), approve(ERIN, first)]);

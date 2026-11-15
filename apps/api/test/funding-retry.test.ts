@@ -160,7 +160,7 @@ describe("retry a Deal's funding", () => {
     expect(wait).toBeLessThan(5_000);
   });
 
-  it("resends a lost charge with the same key, and the Buyer is charged once", async () => {
+  it("[CTRL-PAY-02] resends a lost charge with the same key, and the Buyer is charged once", async () => {
     const t = await begin([{ kind: "lose_reply" }]);
     const dealId = await t.fundNewDeal();
     const key = (await dealRow(dealId))?.fundingIdempotencyKey;
@@ -245,7 +245,7 @@ describe("retry a Deal's funding", () => {
     expect(gaps).toEqual([1_000, 2_000, 4_000, 8_000]);
   });
 
-  it("skips a Deal that another try holds with a row lock", async () => {
+  it("[CTRL-PAY-02] skips a Deal that another try holds with a row lock", async () => {
     const t = await begin([{ kind: "lose_reply" }]);
     const dealId = await t.fundNewDeal();
     t.advance(2_000);
