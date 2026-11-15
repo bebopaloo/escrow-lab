@@ -9,7 +9,7 @@ describe("fake payment rail", () => {
     expect(rail.moved).toBe(500);
   });
 
-  it("returns the first result for the same key, amount and party", async () => {
+  it("[CTRL-PAY-02] returns the first result for the same key, amount and party", async () => {
     const rail = createFakePaymentRail();
     const first = await rail.charge("buyer-1", 500, "key-1");
     expect(await rail.charge("buyer-1", 500, "key-1")).toEqual(first);

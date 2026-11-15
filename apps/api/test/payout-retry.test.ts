@@ -154,7 +154,7 @@ describe("retry a Payout", () => {
     await database.close();
   });
 
-  it("sends a lost transfer again with the same key, and the ledger has one Payout", async () => {
+  it("[CTRL-PAY-02] sends a lost transfer again with the same key, and the ledger has one Payout", async () => {
     const t = await start([{ kind: "lose_reply" }]);
     const { dealId, milestoneId } = await t.approvedPayout();
     const before = await payoutOf(milestoneId);
@@ -231,7 +231,7 @@ describe("retry a Payout", () => {
     expect(t.transferKeys).toHaveLength(1);
   });
 
-  it("skips a Payout that another try holds with a row lock", async () => {
+  it("[CTRL-PAY-02] skips a Payout that another try holds with a row lock", async () => {
     const t = await start([{ kind: "lose_reply" }]);
     const { dealId, milestoneId } = await t.approvedPayout();
     const payout = await payoutOf(milestoneId);
@@ -335,7 +335,7 @@ describe("retry a Payout", () => {
       expect(response.statusCode).toBe(404);
     });
 
-    it("gives a Buyer and a Seller 403, nobody 401, and changes nothing", async () => {
+    it("[CTRL-PAY-01] gives a Buyer and a Seller 403, nobody 401, and changes nothing", async () => {
       const { t, milestoneId, payoutId } = await failedPayout();
       expect((await t.call(ALICE, "POST", `/api/payouts/${payoutId}/retry`)).statusCode).toBe(403);
       expect((await t.call(CAROL, "POST", `/api/payouts/${payoutId}/retry`)).statusCode).toBe(403);

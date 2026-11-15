@@ -11,7 +11,7 @@ describe("fake chain", () => {
     expect(chain.moved).toBe(700);
   });
 
-  it("returns the first result for the same key, amount and party", async () => {
+  it("[CTRL-PAY-02] returns the first result for the same key, amount and party", async () => {
     const chain = createFakeChain();
     const first = await chain.lock("deal-1", 500, "key-1");
     const again = await chain.lock("deal-1", 500, "key-1");

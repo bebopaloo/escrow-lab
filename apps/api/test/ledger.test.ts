@@ -36,7 +36,7 @@ describe("ledger", () => {
     expect(entry).toMatchObject({ kind: "deposit", amountMinor: 100_000, chainTxId: "tx-1" });
   });
 
-  it("refuses UPDATE and DELETE", async () => {
+  it("[CTRL-LED-01] refuses UPDATE and DELETE", async () => {
     await expect(
       database.db
         .update(schema.ledgerEntries)
@@ -49,7 +49,7 @@ describe("ledger", () => {
     expect(await rows()).toHaveLength(1);
   });
 
-  it("refuses a second deposit for the same Deal", async () => {
+  it("[CTRL-PAY-02] refuses a second deposit for the same Deal", async () => {
     await expect(
       recordDeposit(database.db, { dealId, amountMinor: 100_000, chainTxId: "tx-2" }),
     ).rejects.toThrow();
