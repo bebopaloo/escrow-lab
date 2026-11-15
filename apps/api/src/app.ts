@@ -10,8 +10,13 @@ import {
   validatorCompiler,
   type ZodTypeProvider,
 } from "fastify-type-provider-zod";
+import { createChain, type Chain } from "./adapters/chain/index.ts";
+import { createPaymentRail, type PaymentRail } from "./adapters/payment-rail/index.ts";
 import type { Config } from "./config.ts";
+import { approvalRoutes } from "./modules/approval/index.ts";
+import { dealRoutes } from "./modules/deals/index.ts";
 import { identityRoutes } from "./modules/identity/index.ts";
+import { milestoneRoutes } from "./modules/milestones/index.ts";
 import { healthRoutes } from "./routes/health.ts";
 
 declare module "fastify" {
@@ -25,6 +30,10 @@ export interface AppOptions {
   config: Config;
   db: Database;
   logger?: FastifyServerOptions["logger"];
+  /** Defaults to `createChain()`. Tests pass a scripted fake. */
+  chain?: Chain;
+  /** Defaults to `createPaymentRail()`. Tests pass a scripted fake. */
+  paymentRail?: PaymentRail;
 }
 
 const SESSION_MAX_AGE_SECONDS = 8 * 60 * 60;
@@ -32,7 +41,13 @@ const SESSION_COOKIE_NAME = "__Host-session";
 
 const REDACTED_KEYS = ["req.headers.authorization", "req.headers.cookie", "*.password", "*.token"];
 
-export async function buildApp({ config, db, logger }: AppOptions) {
+export async function buildApp({
+  config,
+  db,
+  logger,
+  chain = createChain(),
+  paymentRail = createPaymentRail(),
+}: AppOptions) {
   const app = Fastify({
     logger: logger ?? { level: config.LOG_LEVEL, redact: REDACTED_KEYS },
   }).withTypeProvider<ZodTypeProvider>();
@@ -80,6 +95,9 @@ export async function buildApp({ config, db, logger }: AppOptions) {
 
   await app.register(healthRoutes, { prefix: "/api", db });
   await app.register(identityRoutes, { prefix: "/api", db });
+  await app.register(dealRoutes, { prefix: "/api", db, chain, paymentRail });
+  await app.register(milestoneRoutes, { prefix: "/api", db });
+  await app.register(approvalRoutes, { prefix: "/api", db, chain });
 
   return app;
 }
