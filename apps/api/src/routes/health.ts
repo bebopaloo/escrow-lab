@@ -16,8 +16,12 @@ export const healthRoutes: FastifyPluginCallbackZod<HealthOptions> = (app, { db 
     },
     async (request, reply) => {
       try {
-        await db.execute(sql`select 1`);
-        return { status: "ok" as const };
+        const started = performance.now();
+        const rows = await db.execute<{ count: number }>(
+          sql`select count(*)::int as count from drizzle.__drizzle_migrations`,
+        );
+        const databaseMs = Math.round((performance.now() - started) * 100) / 100;
+        return { status: "ok" as const, migrations: rows[0]?.count ?? 0, databaseMs };
       } catch (error) {
         request.log.warn({ err: error }, "database check failed");
         return reply.status(503).send({ status: "unavailable" });
