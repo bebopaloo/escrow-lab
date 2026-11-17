@@ -11,7 +11,17 @@ export const SELLER_MUST_BE_SELLER = "The Seller must be a user with the Seller 
 
 const Minor = z.number().int().min(1).max(MAX_TOTAL_MINOR);
 
-export const DealState = z.enum(["draft", "funding", "funding_failed", "funded", "completed"]);
+export const DealState = z.enum([
+  "draft",
+  "funding",
+  "funding_failed",
+  "funded",
+  "completed",
+  "cancelled",
+  "refunding",
+  "refund_failed",
+  "refunded",
+]);
 export type DealState = z.infer<typeof DealState>;
 
 export const MilestoneState = z.enum([
