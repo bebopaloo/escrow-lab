@@ -1,6 +1,7 @@
 import {
   ApprovalQueueResponse,
   ApprovePayoutResponse,
+  MismatchListResponse,
   RetryPayoutResponse,
   DealListResponse,
   DealResponse,
@@ -200,4 +201,16 @@ export async function retryPayout(
     throw new RetryError("The retry failed. Reload the queue to see the current state.");
   }
   return RetryPayoutResponse.parse(await response.json());
+}
+
+export async function fetchMismatches(
+  limit: number,
+  offset: number,
+  signal?: AbortSignal,
+): Promise<MismatchListResponse> {
+  const url = new URL("/api/reconciliation/mismatches", window.location.origin);
+  url.searchParams.set("limit", String(limit));
+  url.searchParams.set("offset", String(offset));
+  const response = await fetch(url, signal ? { signal } : {});
+  return MismatchListResponse.parse(await readJson(response, 200, "Mismatch list"));
 }

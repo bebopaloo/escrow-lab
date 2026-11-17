@@ -1,12 +1,14 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { fetchHealth, fetchSession } from "./api.ts";
 import { ApprovalQueue } from "./ApprovalQueue.tsx";
 import { Deals } from "./Deals.tsx";
+import { Reconciliation } from "./Reconciliation.tsx";
 import { SignIn } from "./SignIn.tsx";
 import { SignOut } from "./SignOut.tsx";
 
 export function App() {
+  const [approverPage, setApproverPage] = useState<"queue" | "reconciliation">("queue");
   const health = useQuery({
     queryKey: ["health"],
     queryFn: ({ signal }) => fetchHealth(signal),
@@ -48,7 +50,33 @@ export function App() {
         <>
           <p role="status">Signed in as {session.data.user.displayName}.</p>
           {session.data.user.role === "approver" ? (
-            <ApprovalQueue csrfToken={session.data.csrfToken} />
+            <>
+              <nav aria-label="Approver pages">
+                <button
+                  type="button"
+                  aria-current={approverPage === "queue" ? "page" : undefined}
+                  onClick={() => {
+                    setApproverPage("queue");
+                  }}
+                >
+                  Approval queue
+                </button>
+                <button
+                  type="button"
+                  aria-current={approverPage === "reconciliation" ? "page" : undefined}
+                  onClick={() => {
+                    setApproverPage("reconciliation");
+                  }}
+                >
+                  Reconciliation
+                </button>
+              </nav>
+              {approverPage === "queue" ? (
+                <ApprovalQueue csrfToken={session.data.csrfToken} />
+              ) : (
+                <Reconciliation />
+              )}
+            </>
           ) : (
             <Deals
               role={session.data.user.role}
