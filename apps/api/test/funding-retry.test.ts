@@ -1,5 +1,5 @@
 import { SEED_USERS, schema, seedUsers } from "@escrow-lab/db";
-import { DealResponse, SessionResponse } from "@escrow-lab/shared";
+import { DealResponse } from "@escrow-lab/shared";
 import { eq, sql } from "drizzle-orm";
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { buildApp } from "../src/app.ts";
@@ -15,17 +15,12 @@ import {
 } from "../src/adapters/payment-rail/index.ts";
 import { createFundingRetryJob } from "../src/modules/payout/index.ts";
 import { openTestDatabase, testConfig } from "./database.ts";
+import { signIn } from "./harness.ts";
 
 const ALICE = SEED_USERS[0]?.id ?? "";
 const CAROL = SEED_USERS[2]?.id ?? "";
 
 type Database = Awaited<ReturnType<typeof openTestDatabase>>;
-
-function cookieOf(response: { headers: Record<string, unknown> }): string {
-  const header = response.headers["set-cookie"];
-  const lines = Array.isArray(header) ? header : typeof header === "string" ? [header] : [];
-  return lines.map((line) => String(line).split(";")[0]).join("; ");
-}
 
 const GOOD_DEAL = {
   sellerId: CAROL,
@@ -75,16 +70,7 @@ async function start(
     now: () => new Date(clock),
   });
   async function fundNewDeal(): Promise<string> {
-    const visit = await app.inject({ method: "GET", url: "/api/session" });
-    const token = SessionResponse.parse(visit.json()).csrfToken;
-    const signedIn = await app.inject({
-      method: "POST",
-      url: "/api/session",
-      headers: { cookie: cookieOf(visit), "x-csrf-token": token },
-      payload: { userId: ALICE },
-    });
-    const cookie = cookieOf(signedIn);
-    const csrf = SessionResponse.parse(signedIn.json()).csrfToken;
+    const { cookie, csrfToken: csrf } = await signIn(app, ALICE);
     const created = await app.inject({
       method: "POST",
       url: "/api/deals",

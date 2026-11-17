@@ -1,31 +1,17 @@
 import { SEED_USERS, schema, seedUsers } from "@escrow-lab/db";
-import {
-  ApprovalQueueResponse,
-  ApprovePayoutResponse,
-  DealResponse,
-  SessionResponse,
-} from "@escrow-lab/shared";
+import { ApprovalQueueResponse, ApprovePayoutResponse, DealResponse } from "@escrow-lab/shared";
 import { eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { buildApp } from "../src/app.ts";
 import { createFakeChain, type Chain, type Step } from "../src/adapters/chain/index.ts";
 import { openTestDatabase, testConfig } from "./database.ts";
+import { signIn as signInOn, type Session } from "./harness.ts";
 
 const ALICE = SEED_USERS[0]?.id ?? "";
 const CAROL = SEED_USERS[2]?.id ?? "";
 const ERIN = SEED_USERS[4]?.id ?? "";
 
 type Database = Awaited<ReturnType<typeof openTestDatabase>>;
-interface Session {
-  cookie: string;
-  csrfToken: string;
-}
-
-function cookieOf(response: { headers: Record<string, unknown> }): string {
-  const header = response.headers["set-cookie"];
-  const lines = Array.isArray(header) ? header : typeof header === "string" ? [header] : [];
-  return lines.map((line) => String(line).split(";")[0]).join("; ");
-}
 
 describe("Approve a Payout", () => {
   let database: Database;
@@ -37,18 +23,7 @@ describe("Approve a Payout", () => {
   async function signIn(userId: string): Promise<Session> {
     const known = sessions.get(userId);
     if (known !== undefined) return known;
-    const visit = await app.inject({ method: "GET", url: "/api/session" });
-    const token = SessionResponse.parse(visit.json()).csrfToken;
-    const response = await app.inject({
-      method: "POST",
-      url: "/api/session",
-      headers: { cookie: cookieOf(visit), "x-csrf-token": token },
-      payload: { userId },
-    });
-    const session = {
-      cookie: cookieOf(response),
-      csrfToken: SessionResponse.parse(response.json()).csrfToken,
-    };
+    const session = await signInOn(app, userId);
     sessions.set(userId, session);
     return session;
   }

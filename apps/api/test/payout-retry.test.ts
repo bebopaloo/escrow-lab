@@ -1,10 +1,5 @@
 import { SEED_USERS, schema, seedUsers } from "@escrow-lab/db";
-import {
-  ApprovalQueueResponse,
-  DealResponse,
-  RetryPayoutResponse,
-  SessionResponse,
-} from "@escrow-lab/shared";
+import { ApprovalQueueResponse, DealResponse, RetryPayoutResponse } from "@escrow-lab/shared";
 import { randomUUID } from "node:crypto";
 import { eq, sql } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -17,18 +12,13 @@ import {
 import { createFakePaymentRail } from "../src/adapters/payment-rail/index.ts";
 import { createFundingRetryJob } from "../src/modules/payout/index.ts";
 import { openTestDatabase, testConfig } from "./database.ts";
+import { cookieOf, signIn } from "./harness.ts";
 
 const ALICE = SEED_USERS[0]?.id ?? "";
 const CAROL = SEED_USERS[2]?.id ?? "";
 const ERIN = SEED_USERS[4]?.id ?? "";
 
 type Database = Awaited<ReturnType<typeof openTestDatabase>>;
-
-function cookieOf(response: { headers: Record<string, unknown> }): string {
-  const header = response.headers["set-cookie"];
-  const lines = Array.isArray(header) ? header : typeof header === "string" ? [header] : [];
-  return lines.map((line) => String(line).split(";")[0]).join("; ");
-}
 
 describe("retry a Payout", () => {
   let database: Database;
@@ -66,18 +56,7 @@ describe("retry a Payout", () => {
     async function call(userId: string, method: "GET" | "POST", url: string, payload: object = {}) {
       let who = sessions.get(userId);
       if (who === undefined) {
-        const visit = await app.inject({ method: "GET", url: "/api/session" });
-        const token = SessionResponse.parse(visit.json()).csrfToken;
-        const signedIn = await app.inject({
-          method: "POST",
-          url: "/api/session",
-          headers: { cookie: cookieOf(visit), "x-csrf-token": token },
-          payload: { userId },
-        });
-        who = {
-          cookie: cookieOf(signedIn),
-          csrfToken: SessionResponse.parse(signedIn.json()).csrfToken,
-        };
+        who = await signIn(app, userId);
         sessions.set(userId, who);
       }
       return app.inject({

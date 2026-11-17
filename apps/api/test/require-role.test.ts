@@ -1,10 +1,11 @@
 import { SEED_USERS, seedUsers } from "@escrow-lab/db";
-import { SessionResponse, type Role } from "@escrow-lab/shared";
+import { type Role } from "@escrow-lab/shared";
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { buildApp } from "../src/app.ts";
 import { requireRole } from "../src/modules/identity/index.ts";
 import { openTestDatabase, testConfig } from "./database.ts";
+import { cookieOf, signIn } from "./harness.ts";
 
 describe("requireRole", () => {
   let database: Awaited<ReturnType<typeof openTestDatabase>>;
@@ -32,23 +33,9 @@ describe("requireRole", () => {
     return app;
   }
 
-  function cookieOf(response: { headers: Record<string, unknown> }): string {
-    const header = response.headers["set-cookie"];
-    const lines = Array.isArray(header) ? header : typeof header === "string" ? [header] : [];
-    return lines.map((line) => String(line).split(";")[0]).join("; ");
-  }
-
   async function cookieFor(app: Awaited<ReturnType<typeof makeApp>>, role: Role) {
     const seedUser = SEED_USERS.find((user) => user.role === role);
-    const visit = await app.inject({ method: "GET", url: "/api/session" });
-    const token = SessionResponse.parse(visit.json()).csrfToken;
-    const signedIn = await app.inject({
-      method: "POST",
-      url: "/api/session",
-      headers: { cookie: cookieOf(visit), "x-csrf-token": token },
-      payload: { userId: seedUser?.id },
-    });
-    return cookieOf(signedIn);
+    return (await signIn(app, seedUser?.id ?? "")).cookie;
   }
 
   it("answers 401 with no session", async () => {
