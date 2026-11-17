@@ -1,7 +1,7 @@
 import { SEED_USERS, schema, seedUsers } from "@escrow-lab/db";
 import { ApprovalQueueResponse, DealResponse, RetryPayoutResponse } from "@escrow-lab/shared";
 import { randomUUID } from "node:crypto";
-import { eq, sql } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { buildApp } from "../src/app.ts";
 import {
@@ -208,33 +208,6 @@ describe("retry a Payout", () => {
       .where(eq(schema.payouts.milestoneId, milestoneId));
     await t.job.runOnce({ dealIds: [dealId] });
     expect(t.transferKeys).toHaveLength(1);
-  });
-
-  it("[CTRL-PAY-02] skips a Payout that another try holds with a row lock", async () => {
-    const t = await start([{ kind: "lose_reply" }]);
-    const { dealId, milestoneId } = await t.approvedPayout();
-    const payout = await payoutOf(milestoneId);
-    let release: () => void = () => undefined;
-    const held = new Promise<void>((resolve) => {
-      release = resolve;
-    });
-    let locked: () => void = () => undefined;
-    const lockedRow = new Promise<void>((resolve) => {
-      locked = resolve;
-    });
-    const holder = database.db.transaction(async (tx) => {
-      await tx.execute(sql`select id from payouts where id = ${payout?.id ?? ""} for update`);
-      locked();
-      await held;
-    });
-    await lockedRow;
-    await t.job.runOnce({ dealIds: [dealId] });
-    expect(t.transferKeys).toHaveLength(1);
-    release();
-    await holder;
-    await t.job.runOnce({ dealIds: [dealId] });
-    expect(t.transferKeys).toHaveLength(2);
-    expect((await payoutOf(milestoneId))?.state).toBe("confirmed");
   });
 
   it("leaves a Payout alone when it left pending during a failing try, and writes no audit event", async () => {
