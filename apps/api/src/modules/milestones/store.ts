@@ -1,5 +1,5 @@
 import { schema, type Database } from "@escrow-lab/db";
-import type { MilestoneResponse } from "@escrow-lab/shared";
+import type { DealMilestoneResponse, MilestoneResponse } from "@escrow-lab/shared";
 import { and, asc, eq } from "drizzle-orm";
 import { recordAuditEvent } from "../audit/index.ts";
 
@@ -38,8 +38,12 @@ export async function insertMilestones(
     });
 }
 
-export async function listMilestones(db: Database, dealId: string): Promise<MilestoneResponse[]> {
-  return db
+/** The Milestones of a Deal with the state of each Payout. A confirmed Payout is paid at its ledger entry time. */
+export async function listMilestones(
+  db: Database,
+  dealId: string,
+): Promise<DealMilestoneResponse[]> {
+  const rows = await db
     .select({
       id: schema.milestones.id,
       position: schema.milestones.position,
@@ -48,10 +52,26 @@ export async function listMilestones(db: Database, dealId: string): Promise<Mile
       state: schema.milestones.state,
       evidenceText: schema.milestones.evidenceText,
       rejectionReason: schema.milestones.rejectionReason,
+      payoutState: schema.payouts.state,
+      paidAt: schema.ledgerEntries.createdAt,
     })
     .from(schema.milestones)
+    .leftJoin(schema.payouts, eq(schema.payouts.milestoneId, schema.milestones.id))
+    .leftJoin(
+      schema.ledgerEntries,
+      and(
+        eq(schema.ledgerEntries.dealId, schema.milestones.dealId),
+        eq(schema.ledgerEntries.kind, "payout"),
+        eq(schema.ledgerEntries.chainTxId, schema.payouts.chainTxId),
+      ),
+    )
     .where(eq(schema.milestones.dealId, dealId))
     .orderBy(asc(schema.milestones.position));
+  return rows.map(({ payoutState, paidAt, ...milestone }) => ({
+    ...milestone,
+    payout:
+      payoutState === null ? null : { state: payoutState, paidAt: paidAt?.toISOString() ?? null },
+  }));
 }
 
 /** Opens the first Milestone of a funded Deal: `pending` becomes `awaiting_evidence`. */
