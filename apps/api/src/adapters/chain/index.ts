@@ -1,7 +1,7 @@
 import { createFakeChain } from "./fake.ts";
 import type { Chain } from "./port.ts";
 
-export type { Chain, ChainResult, Failure } from "./port.ts";
+export type { Chain, ChainResult, ChainStatus, Failure } from "./port.ts";
 export type { FakeChain } from "./fake.ts";
 export type { Step } from "../fake-core.ts";
 

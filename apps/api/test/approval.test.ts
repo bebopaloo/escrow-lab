@@ -122,6 +122,7 @@ describe("Approve a Payout", () => {
     transfers = [];
     const chain: Chain = {
       lock: (deal, amount, key) => fake.lock(deal, amount, key),
+      status: (key) => fake.status(key),
       transfer: (seller, amount, key) => {
         transfers.push({ seller, amount, key });
         return fake.transfer(seller, amount, key);
