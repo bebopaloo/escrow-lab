@@ -39,8 +39,8 @@ const ITEMS = [
   },
 ];
 
-function page(items: unknown[]) {
-  return HttpResponse.json({ items, total: items.length, limit: 100, offset: 0 });
+function page(items: unknown[], oldMismatches = 0) {
+  return HttpResponse.json({ items, total: items.length, limit: 100, offset: 0, oldMismatches });
 }
 
 function renderQueue() {
@@ -75,6 +75,31 @@ describe("ApprovalQueue", () => {
     expect(within(deal).queryByRole("button")).not.toBeInTheDocument();
   });
 
+  it("warns about old mismatches with a link to the Reconciliation page", async () => {
+    server.use(http.get("*/api/approvals", () => page(ITEMS, 3)));
+    renderQueue();
+    const banner = await screen.findByRole("status", { name: "Old mismatches" });
+    expect(banner).toHaveTextContent("3 mismatches are older than 24 hours.");
+    expect(
+      within(banner).getByRole("link", { name: "Open the Reconciliation page" }),
+    ).toHaveAttribute("href", "/reconciliation");
+  });
+
+  it("uses the singular for one old mismatch", async () => {
+    server.use(http.get("*/api/approvals", () => page(ITEMS, 1)));
+    renderQueue();
+    expect(await screen.findByRole("status", { name: "Old mismatches" })).toHaveTextContent(
+      "1 mismatch is older than 24 hours.",
+    );
+  });
+
+  it("shows no mismatch banner when no mismatch is old", async () => {
+    server.use(http.get("*/api/approvals", () => page(ITEMS, 0)));
+    renderQueue();
+    await screen.findByRole("listitem", { name: /Draft/ });
+    expect(screen.queryByRole("status", { name: "Old mismatches" })).not.toBeInTheDocument();
+  });
+
   it("says that nothing waits when the queue is empty", async () => {
     server.use(http.get("*/api/approvals", () => page([])));
     renderQueue();
@@ -84,7 +109,13 @@ describe("ApprovalQueue", () => {
   it("tells the Approver when the queue shows only part of the items", async () => {
     server.use(
       http.get("*/api/approvals", () =>
-        HttpResponse.json({ items: [ITEMS[0]], total: 150, limit: 100, offset: 0 }),
+        HttpResponse.json({
+          items: [ITEMS[0]],
+          total: 150,
+          limit: 100,
+          offset: 0,
+          oldMismatches: 0,
+        }),
       ),
     );
     renderQueue();

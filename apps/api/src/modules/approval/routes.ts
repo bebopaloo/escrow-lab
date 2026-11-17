@@ -18,7 +18,7 @@ import type { Chain } from "../../adapters/chain/index.ts";
 import { requireRole } from "../identity/index.ts";
 import { approvePayout } from "./approve.ts";
 import { retryPayout } from "./retry.ts";
-import { listApprovalQueue } from "./queue.ts";
+import { countOldMismatches, listApprovalQueue } from "./queue.ts";
 
 const APPROVE_LIMIT = 30;
 
@@ -45,7 +45,8 @@ export const approvalRoutes: FastifyPluginCallbackZod<ApprovalOptions> = (
     async (request) => {
       const { limit, offset } = request.query;
       const page = await listApprovalQueue(db, limit, offset);
-      return { ...page, limit, offset };
+      const oldMismatches = await countOldMismatches(db, new Date());
+      return { ...page, limit, offset, oldMismatches };
     },
   );
 
