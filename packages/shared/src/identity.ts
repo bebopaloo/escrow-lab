@@ -26,5 +26,12 @@ export type SessionResponse = z.infer<typeof SessionResponse>;
 export const SignInRequest = z.object({ userId: z.uuid() }).strict();
 export type SignInRequest = z.infer<typeof SignInRequest>;
 
+export const DISPLAY_NAME_MAX = 60;
+
+export const ChangeDisplayNameRequest = z
+  .object({ displayName: z.string().trim().min(1).max(DISPLAY_NAME_MAX) })
+  .strict();
+export type ChangeDisplayNameRequest = z.infer<typeof ChangeDisplayNameRequest>;
+
 export const ErrorResponse = z.object({ error: z.string(), requestId: z.string() }).strict();
 export type ErrorResponse = z.infer<typeof ErrorResponse>;

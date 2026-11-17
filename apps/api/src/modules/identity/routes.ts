@@ -1,11 +1,18 @@
 import type { Database } from "@escrow-lab/db";
-import { ErrorResponse, SessionResponse, SignInRequest, UsersResponse } from "@escrow-lab/shared";
+import {
+  ChangeDisplayNameRequest,
+  ErrorResponse,
+  SessionResponse,
+  SessionUser,
+  SignInRequest,
+  UsersResponse,
+} from "@escrow-lab/shared";
 import type { preHandlerHookHandler } from "fastify";
 import { z } from "zod";
 import type { FastifyPluginCallbackZod } from "fastify-type-provider-zod";
 import { recordAuditEvent } from "../audit/index.ts";
 import { authenticate, requireSession, startSession } from "./hooks.ts";
-import { bumpSessionVersion, findUserWithVersion, listUsers } from "./users.ts";
+import { bumpSessionVersion, findUserWithVersion, listUsers, changeDisplayName } from "./users.ts";
 
 declare module "@fastify/secure-session" {
   interface SessionData {
@@ -63,6 +70,27 @@ export const identityRoutes: FastifyPluginCallbackZod<IdentityOptions> = (app, {
       request.session.regenerate();
       startSession(request, user.id, sessionVersion);
       return { user, csrfToken: reply.generateCsrf() };
+    },
+  );
+  app.patch(
+    "/session/user",
+    {
+      onRequest: [requireSession(db), csrf],
+      schema: {
+        body: ChangeDisplayNameRequest,
+        response: { 200: SessionUser, 401: ErrorResponse, 409: ErrorResponse },
+      },
+    },
+    async (request, reply) => {
+      // requireSession sets the user. The check keeps the type honest.
+      const me = request.user;
+      if (me === null)
+        return reply.status(401).send({ error: "Unauthorized", requestId: request.id });
+      const result = await changeDisplayName(db, me.id, request.body.displayName);
+      if (result === "taken") {
+        return reply.status(409).send({ error: "Name already in use", requestId: request.id });
+      }
+      return result;
     },
   );
   app.delete(

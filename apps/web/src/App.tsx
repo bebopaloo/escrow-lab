@@ -1,10 +1,38 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import type { SessionUser } from "@escrow-lab/shared";
 import { fetchHealth, fetchSession } from "./api.ts";
 import { ApprovalQueue } from "./ApprovalQueue.tsx";
 import { Deals } from "./Deals.tsx";
+import { Profile } from "./Profile.tsx";
 import { SignIn } from "./SignIn.tsx";
 import { SignOut } from "./SignOut.tsx";
+
+function SignedIn({ user, csrfToken }: { user: SessionUser; csrfToken: string }) {
+  // This state goes away at sign-out, so the next person starts on the home page.
+  const [page, setPage] = useState<"home" | "profile">("home");
+  return (
+    <>
+      <p role="status">Signed in as {user.displayName}.</p>
+      <button
+        type="button"
+        onClick={() => {
+          setPage(page === "profile" ? "home" : "profile");
+        }}
+      >
+        {page === "profile" ? "Back" : "Profile"}
+      </button>
+      {page === "profile" ? (
+        <Profile user={user} csrfToken={csrfToken} />
+      ) : user.role === "approver" ? (
+        <ApprovalQueue csrfToken={csrfToken} />
+      ) : (
+        <Deals role={user.role} userId={user.id} csrfToken={csrfToken} />
+      )}
+      <SignOut csrfToken={csrfToken} />
+    </>
+  );
+}
 
 export function App() {
   const health = useQuery({
@@ -45,19 +73,7 @@ export function App() {
       {session.isError && <p role="alert">The session cannot be read. Reload this page.</p>}
       {session.data?.user === null && <SignIn csrfToken={session.data.csrfToken} />}
       {session.data?.user && (
-        <>
-          <p role="status">Signed in as {session.data.user.displayName}.</p>
-          {session.data.user.role === "approver" ? (
-            <ApprovalQueue csrfToken={session.data.csrfToken} />
-          ) : (
-            <Deals
-              role={session.data.user.role}
-              userId={session.data.user.id}
-              csrfToken={session.data.csrfToken}
-            />
-          )}
-          <SignOut csrfToken={session.data.csrfToken} />
-        </>
+        <SignedIn user={session.data.user} csrfToken={session.data.csrfToken} />
       )}
     </main>
   );
