@@ -8,6 +8,7 @@ import {
   HealthResponse,
   MilestoneResponse,
   PAYMENT_FAILED,
+  PayoutHistoryResponse,
   SessionResponse,
   UsersResponse,
   type CreateDealRequest,
@@ -200,4 +201,16 @@ export async function retryPayout(
     throw new RetryError("The retry failed. Reload the queue to see the current state.");
   }
   return RetryPayoutResponse.parse(await response.json());
+}
+
+export async function fetchPayoutHistory(
+  limit: number,
+  offset: number,
+  signal?: AbortSignal,
+): Promise<PayoutHistoryResponse> {
+  const url = new URL("/api/payouts/mine", window.location.origin);
+  url.searchParams.set("limit", limit.toString());
+  url.searchParams.set("offset", offset.toString());
+  const response = await fetch(url, signal ? { signal } : {});
+  return PayoutHistoryResponse.parse(await readJson(response, 200, "Payout history"));
 }
