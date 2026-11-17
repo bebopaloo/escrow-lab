@@ -29,6 +29,7 @@ export function CreateDeal({ csrfToken, onCreated, onCancel }: CreateDealProps) 
   const [title, setTitle] = useState("");
   const [total, setTotal] = useState("");
   const [milestones, setMilestones] = useState<MilestoneInput[]>([{ title: "", amount: "" }]);
+  const [express, setExpress] = useState(true);
   const [formError, setFormError] = useState<string | null>(null);
   const [badTotal, setBadTotal] = useState(false);
   const [badAmounts, setBadAmounts] = useState<boolean[]>([]);
@@ -75,6 +76,7 @@ export function CreateDeal({ csrfToken, onCreated, onCancel }: CreateDealProps) 
       sellerId,
       title,
       totalMinor,
+      express,
       milestones: parsed.map((item) => ({ title: item.title, amountMinor: item.amountMinor ?? 0 })),
     });
   }
@@ -133,6 +135,17 @@ export function CreateDeal({ csrfToken, onCreated, onCancel }: CreateDealProps) 
               setTotal(event.target.value);
             }}
           />
+        </p>
+        <p>
+          <input
+            id="deal-express"
+            type="checkbox"
+            checked={express}
+            onChange={(event) => {
+              setExpress(event.target.checked);
+            }}
+          />{" "}
+          <label htmlFor="deal-express">Express: pay each Milestone when I accept it</label>
         </p>
         <p id="deal-amount-help">{AMOUNT_HELP}</p>
         <fieldset>

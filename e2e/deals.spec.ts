@@ -83,6 +83,7 @@ test("a Seller sends evidence, the Buyer rejects it, then accepts the new eviden
   await page.getByLabel("Seller").selectOption({ label: "Carol Seller" });
   await page.getByLabel("Deal title").fill(title);
   await page.getByLabel("Total (£)").fill("1000");
+  await page.getByRole("checkbox", { name: /Express/ }).uncheck();
   await page.getByLabel("Milestone 1 title").fill("Draft");
   await page.getByLabel("Milestone 1 amount (£)").fill("1000");
   await page.getByRole("button", { name: "Create the Deal" }).click();

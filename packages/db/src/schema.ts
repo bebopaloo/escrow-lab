@@ -2,6 +2,7 @@
 // generated migration with it.
 import { sql } from "drizzle-orm";
 import {
+  boolean,
   check,
   index,
   integer,
@@ -61,6 +62,8 @@ export const deals = pgTable(
     })
       .notNull()
       .default("draft"),
+    /** An express Deal pays a Milestone when the Buyer accepts its evidence. Fixed at creation. */
+    express: boolean("express").notNull().default(true),
     fundingIdempotencyKey: text("funding_idempotency_key"),
     fundingAttempts: integer("funding_attempts").notNull().default(0),
     nextFundingTryAt: timestamp("next_funding_try_at", { withTimezone: true }),

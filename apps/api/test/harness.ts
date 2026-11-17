@@ -122,13 +122,14 @@ export async function startHarness(database: TestDatabase, options: HarnessOptio
     app,
     calls,
     call,
-    /** A draft Deal of 400 and 600 pounds. */
-    async createDeal() {
+    /** A draft Deal of 400 and 600 pounds. It keeps the approval path unless the test asks for express. */
+    async createDeal(options: { express?: boolean } = {}) {
       const created = ok(
         await call(ALICE, "POST", "/api/deals", {
           sellerId: CAROL,
           title: "Logo design",
           totalMinor: 100_000,
+          express: options.express ?? false,
           milestones: [
             { title: "Draft", amountMinor: 40_000 },
             { title: "Final", amountMinor: 60_000 },

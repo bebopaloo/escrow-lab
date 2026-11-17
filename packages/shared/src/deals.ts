@@ -28,6 +28,7 @@ export const CreateDealRequest = z
     sellerId: z.uuid(),
     title: z.string().trim().min(1).max(100),
     totalMinor: Minor,
+    express: z.boolean().default(true),
     milestones: z
       .array(z.object({ title: z.string().trim().min(1).max(100), amountMinor: Minor }).strict())
       .min(1)
@@ -59,6 +60,7 @@ export const DealSummary = z
     sellerName: z.string(),
     totalMinor: z.number().int(),
     currency: z.literal("GBP"),
+    express: z.boolean(),
     state: DealState,
     createdAt: z.string(),
   })

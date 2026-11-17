@@ -64,6 +64,7 @@ export function DealDetail({ id, userId, role, csrfToken, onBack }: DealDetailPr
           <p>
             Total: {formatMoney(deal.data.totalMinor)}. State: {deal.data.state.replace("_", " ")}.
           </p>
+          <p>Express: {deal.data.express ? "on" : "off"}.</p>
           {canFund && (
             <button
               type="button"

@@ -10,6 +10,7 @@ import {
 } from "@escrow-lab/shared";
 import type { FastifyReply, FastifyRequest, preHandlerHookHandler } from "fastify";
 import type { FastifyPluginCallbackZod } from "fastify-type-provider-zod";
+import type { Chain } from "../../adapters/chain/index.ts";
 import { requireRole } from "../identity/index.ts";
 import { applyMilestoneAction, type MilestoneAction } from "./store.ts";
 
@@ -17,9 +18,14 @@ const MILESTONE_ACTION_LIMIT = 30;
 
 export interface MilestonesOptions {
   db: Database;
+  chain: Chain;
 }
 
-export const milestoneRoutes: FastifyPluginCallbackZod<MilestonesOptions> = (app, { db }, done) => {
+export const milestoneRoutes: FastifyPluginCallbackZod<MilestonesOptions> = (
+  app,
+  { db, chain },
+  done,
+) => {
   const csrf: preHandlerHookHandler = (request, reply, next) => {
     app.csrfProtection(request, reply, next);
   };
@@ -36,7 +42,7 @@ export const milestoneRoutes: FastifyPluginCallbackZod<MilestonesOptions> = (app
     milestoneId: string,
     action: MilestoneAction,
   ) {
-    const outcome = await applyMilestoneAction(db, milestoneId, action);
+    const outcome = await applyMilestoneAction(db, chain, milestoneId, action);
     if (outcome.kind === "not_found") {
       return reply.status(404).send({ error: "Not found", requestId: request.id });
     }
