@@ -158,3 +158,24 @@ export const payouts = pgTable(
     check("payouts_state_check", sql`${table.state} in ('pending', 'confirmed', 'failed')`),
   ],
 );
+
+/** Insert only: a note cannot be edited or deleted. */
+export const dealNotes = pgTable(
+  "deal_notes",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    dealId: uuid("deal_id")
+      .notNull()
+      .references(() => deals.id),
+    authorId: uuid("author_id")
+      .notNull()
+      .references(() => users.id),
+    text: text("text").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index("deal_notes_deal_id_created_at_idx").on(table.dealId, table.createdAt),
+    index("deal_notes_author_id_idx").on(table.authorId),
+    check("deal_notes_text_check", sql`char_length(${table.text}) between 1 and 1000`),
+  ],
+);
