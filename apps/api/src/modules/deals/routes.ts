@@ -1,5 +1,6 @@
 import type { Database } from "@escrow-lab/db";
 import {
+  AddNoteRequest,
   CreateDealRequest,
   DealIdParams,
   DealListResponse,
@@ -7,6 +8,8 @@ import {
   ErrorResponse,
   ListDealsQuery,
   MILESTONES_MUST_ADD_UP,
+  NoteResponse,
+  NotesResponse,
   PAYMENT_FAILED,
   SELLER_MUST_BE_SELLER,
   WRONG_DEAL_STATE,
@@ -20,10 +23,12 @@ import { listDealAuditEvents } from "../audit/index.ts";
 import { requireRole } from "../identity/index.ts";
 import { toCsv } from "./csv.ts";
 import { fundDeal } from "./fund.ts";
+import { addNote, listNotes } from "./notes.ts";
 import { createDeal, findDeal, isSeller, listDeals } from "./store.ts";
 
 const CREATE_DEAL_LIMIT = 30;
 const FUND_DEAL_LIMIT = 30;
+const ADD_NOTE_LIMIT = 30;
 
 export interface DealsOptions {
   db: Database;
@@ -152,6 +157,41 @@ export const dealRoutes: FastifyPluginCallbackZod<DealsOptions> = (
       const deal = await findDeal(db, buyerId, request.params.id);
       if (deal === undefined) throw new Error("The funded Deal cannot be read");
       return deal;
+    },
+  );
+
+  app.get(
+    "/deals/:id/notes",
+    {
+      onRequest: participant,
+      schema: { params: DealIdParams, response: { 200: NotesResponse, 404: ErrorResponse } },
+    },
+    async (request, reply) => {
+      const notes = await listNotes(db, request.user?.id ?? "", request.params.id);
+      if (notes === undefined) {
+        return reply.status(404).send({ error: "Not found", requestId: request.id });
+      }
+      return { notes };
+    },
+  );
+
+  app.post(
+    "/deals/:id/notes",
+    {
+      config: { rateLimit: { max: ADD_NOTE_LIMIT, timeWindow: "1 minute" } },
+      onRequest: [participant, csrf],
+      schema: {
+        params: DealIdParams,
+        body: AddNoteRequest,
+        response: { 201: NoteResponse, 404: ErrorResponse },
+      },
+    },
+    async (request, reply) => {
+      const note = await addNote(db, request.user?.id ?? "", request.params.id, request.body.text);
+      if (note === undefined) {
+        return reply.status(404).send({ error: "Not found", requestId: request.id });
+      }
+      return reply.status(201).send(note);
     },
   );
   done();

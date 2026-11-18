@@ -72,6 +72,7 @@ function signedInAs(user: typeof ALICE | typeof CAROL, deals: unknown[] = [SUMMA
       HttpResponse.json({ deals, total: deals.length, limit: 20, offset: 0 }),
     ),
     http.get(`*/api/deals/${DEAL_ID}`, () => HttpResponse.json(DETAIL)),
+    http.get(`*/api/deals/${DEAL_ID}/notes`, () => HttpResponse.json({ notes: [] })),
   );
 }
 
@@ -629,5 +630,111 @@ describe("Milestone evidence", () => {
     await userEvent.click(await screen.findByRole("button", { name: "Accept the evidence" }));
     expect(await screen.findByRole("button", { name: "Accept the evidence" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "Reject the evidence" })).toBeDisabled();
+  });
+});
+
+describe("Deal notes", () => {
+  const NOTE_OLD = {
+    id: "33333333-3333-4333-8333-333333333331",
+    text: "Please send the draft by Friday.",
+    authorId: ALICE.id,
+    authorName: ALICE.displayName,
+    createdAt: "2026-11-14T10:00:00.000Z",
+  };
+  const NOTE_NEW = {
+    id: "33333333-3333-4333-8333-333333333332",
+    text: "Will do.",
+    authorId: CAROL.id,
+    authorName: CAROL.displayName,
+    createdAt: "2026-11-14T11:30:00.000Z",
+  };
+
+  async function openDeal() {
+    renderApp();
+    await userEvent.click(await screen.findByRole("link", { name: /Logo design/ }));
+    await screen.findByRole("heading", { name: "Logo design" });
+  }
+
+  it("lists the notes newest first, with the author and the time", async () => {
+    signedInAs(CAROL);
+    server.use(
+      http.get(`*/api/deals/${DEAL_ID}/notes`, () =>
+        HttpResponse.json({ notes: [NOTE_NEW, NOTE_OLD] }),
+      ),
+    );
+    await openDeal();
+    const section = await screen.findByRole("region", { name: "Notes" });
+    const items = within(section).getAllByRole("listitem");
+    expect(items).toHaveLength(2);
+    expect(items[0]).toHaveTextContent("Will do.");
+    expect(items[0]).toHaveTextContent("Carol Seller");
+    expect(within(section).getAllByText(/2026/)).toHaveLength(2);
+    expect(items[1]).toHaveTextContent("Please send the draft by Friday.");
+    expect(items[1]).toHaveTextContent("Alice Buyer");
+  });
+
+  it("shows an empty state when the Deal has no notes", async () => {
+    signedInAs(ALICE);
+    server.use(http.get(`*/api/deals/${DEAL_ID}/notes`, () => HttpResponse.json({ notes: [] })));
+    await openDeal();
+    expect(await screen.findByText("This Deal has no notes yet.")).toBeVisible();
+  });
+
+  it("sends a note with the CSRF token and shows it in the list", async () => {
+    signedInAs(ALICE);
+    let notes: unknown[] = [];
+    let sent: { body: unknown; token: string | null } | undefined;
+    server.use(
+      http.get(`*/api/deals/${DEAL_ID}/notes`, () => HttpResponse.json({ notes })),
+      http.post(`*/api/deals/${DEAL_ID}/notes`, async ({ request }) => {
+        sent = { body: await request.json(), token: request.headers.get("x-csrf-token") };
+        notes = [NOTE_OLD];
+        return HttpResponse.json(NOTE_OLD, { status: 201 });
+      }),
+    );
+    await openDeal();
+    await userEvent.type(await screen.findByLabelText("Add a note"), NOTE_OLD.text);
+    await userEvent.click(screen.getByRole("button", { name: "Add the note" }));
+    const section = screen.getByRole("region", { name: "Notes" });
+    expect(await within(section).findByRole("listitem")).toHaveTextContent(NOTE_OLD.text);
+    expect(sent).toEqual({ body: { text: NOTE_OLD.text }, token: "token-1" });
+    expect(screen.getByLabelText("Add a note")).toHaveValue("");
+  });
+
+  it("does not send an empty note and says why", async () => {
+    signedInAs(ALICE);
+    let posts = 0;
+    server.use(
+      http.get(`*/api/deals/${DEAL_ID}/notes`, () => HttpResponse.json({ notes: [] })),
+      http.post(`*/api/deals/${DEAL_ID}/notes`, () => {
+        posts += 1;
+        return HttpResponse.json(NOTE_OLD, { status: 201 });
+      }),
+    );
+    await openDeal();
+    await userEvent.type(await screen.findByLabelText("Add a note"), "   ");
+    await userEvent.click(screen.getByRole("button", { name: "Add the note" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("Write a note before you add it.");
+    expect(posts).toBe(0);
+  });
+
+  it("limits the note to 1,000 characters", async () => {
+    signedInAs(ALICE);
+    server.use(http.get(`*/api/deals/${DEAL_ID}/notes`, () => HttpResponse.json({ notes: [] })));
+    await openDeal();
+    expect(await screen.findByLabelText("Add a note")).toHaveAttribute("maxlength", "1000");
+  });
+
+  it("tells the person when the note is refused", async () => {
+    signedInAs(ALICE);
+    server.use(
+      http.get(`*/api/deals/${DEAL_ID}/notes`, () => HttpResponse.json({ notes: [] })),
+      http.post(`*/api/deals/${DEAL_ID}/notes`, () => new HttpResponse(null, { status: 400 })),
+    );
+    await openDeal();
+    await userEvent.type(await screen.findByLabelText("Add a note"), "Hello");
+    await userEvent.click(screen.getByRole("button", { name: "Add the note" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("The note was not added.");
+    expect(screen.getByLabelText("Add a note")).toHaveValue("Hello");
   });
 });

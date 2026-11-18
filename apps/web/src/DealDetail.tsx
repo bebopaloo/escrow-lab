@@ -1,6 +1,7 @@
 import { useRef } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { fetchDeal, fundDeal, NotFoundError, PaymentFailedError } from "./api.ts";
+import { DealNotes } from "./DealNotes.tsx";
 import { MilestoneEvidence } from "./MilestoneEvidence.tsx";
 import { formatMoney } from "./money.ts";
 
@@ -120,6 +121,7 @@ export function DealDetail({ id, userId, role, csrfToken, onBack }: DealDetailPr
               csrfToken={csrfToken}
             />
           )}
+          {isParticipant && <DealNotes dealId={id} csrfToken={csrfToken} />}
         </>
       )}
     </section>
