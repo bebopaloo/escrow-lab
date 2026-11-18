@@ -25,6 +25,7 @@ declare module "@fastify/secure-session" {
 }
 
 const SIGN_IN_LIMIT = 20;
+const CHANGE_NAME_LIMIT = 30;
 
 export interface IdentityOptions {
   db: Database;
@@ -75,6 +76,7 @@ export const identityRoutes: FastifyPluginCallbackZod<IdentityOptions> = (app, {
   app.patch(
     "/session/user",
     {
+      config: { rateLimit: { max: CHANGE_NAME_LIMIT, timeWindow: "1 minute" } },
       onRequest: [requireSession(db), csrf],
       schema: {
         body: ChangeDisplayNameRequest,

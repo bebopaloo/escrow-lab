@@ -37,8 +37,12 @@ describe("PATCH /api/session/user", () => {
     await database.close();
   });
 
+  // One sign-in for each user: the sign-in route has its own rate limit.
+  const sessions = new Map<string, Awaited<ReturnType<typeof signIn>>>();
+
   async function rename(userId: string, payload: unknown) {
-    const session = await signIn(app, userId);
+    const session = sessions.get(userId) ?? (await signIn(app, userId));
+    sessions.set(userId, session);
     return app.inject({
       method: "PATCH",
       url: "/api/session/user",
@@ -89,6 +93,8 @@ describe("PATCH /api/session/user", () => {
     ["a name that is not text", { displayName: 7 }],
     ["an extra field", { displayName: "Fine Name", role: "approver" }],
     ["no name", {}],
+    ["a zero-width character", { displayName: "Erin\u200BApprover" }],
+    ["a control character", { displayName: "Erin\u0007Approver" }],
   ])("refuses %s and changes nothing", async (_label, payload) => {
     const response = await rename(ALICE, payload);
     expect(response.statusCode).toBe(400);
@@ -100,6 +106,18 @@ describe("PATCH /api/session/user", () => {
     const response = await rename(ALICE, { displayName: "  carol SELLER " });
     expect(response.statusCode).toBe(409);
     expect(await nameOf(ALICE)).toBe("Alice Buyer");
+  });
+
+  it("refuses a name that only adds inner spaces or a width variant to another name", async () => {
+    expect((await rename(ALICE, { displayName: "Carol   Seller" })).statusCode).toBe(409);
+    expect((await rename(ALICE, { displayName: "Ｃarol Seller" })).statusCode).toBe(409);
+    expect(await nameOf(ALICE)).toBe("Alice Buyer");
+  });
+
+  it("stores the name with one space between words", async () => {
+    const response = await rename(ALICE, { displayName: "Alice   Two  Words" });
+    expect(response.statusCode).toBe(200);
+    expect(await nameOf(ALICE)).toBe("Alice Two Words");
   });
 
   it("gives a name that two users ask for at the same time to one of them", async () => {
@@ -168,5 +186,36 @@ describe("PATCH /api/session/user", () => {
       (await app.inject({ method: "GET", url: "/api/users" })).json(),
     );
     expect(users.users.map((user) => user.displayName)).toContain("Alice Renamed");
+  });
+});
+
+describe("PATCH /api/session/user rate limit", () => {
+  it("answers 429 over the limit and changes no further name", async () => {
+    const database = await openTestDatabase();
+    await seedUsers(database.db);
+    const app = await buildApp({ config: testConfig, db: database.db, logger: false });
+    try {
+      const session = await signIn(app, ALICE);
+      let limited = 0;
+      for (let i = 0; i < 40; i += 1) {
+        const response = await app.inject({
+          method: "PATCH",
+          url: "/api/session/user",
+          headers: { cookie: session.cookie, "x-csrf-token": session.csrfToken },
+          payload: { displayName: `Limit ${String(i)}` },
+        });
+        if (response.statusCode === 429) limited += 1;
+      }
+      expect(limited).toBeGreaterThan(0);
+    } finally {
+      for (const seed of SEED_USERS) {
+        await database.db
+          .update(schema.users)
+          .set({ displayName: seed.displayName })
+          .where(eq(schema.users.id, seed.id));
+      }
+      await app.close();
+      await database.close();
+    }
   });
 });
