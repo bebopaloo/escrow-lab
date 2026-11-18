@@ -77,6 +77,8 @@ export const ApprovalQueueResponse = z
     total: z.number().int(),
     limit: z.number().int(),
     offset: z.number().int(),
+    /** The open mismatches that the reconciliation job found more than 24 hours ago. */
+    oldMismatches: z.number().int().min(0),
   })
   .strict();
 export type ApprovalQueueResponse = z.infer<typeof ApprovalQueueResponse>;

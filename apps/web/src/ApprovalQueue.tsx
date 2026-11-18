@@ -74,6 +74,14 @@ export function ApprovalQueue({ csrfToken }: ApprovalQueueProps) {
       {retry.isError && <p role="alert">{retry.error.message}</p>}
       {queue.isPending && <p role="status">Loading the approval queue.</p>}
       {queue.isError && <p role="alert">The approval queue cannot be loaded. Reload this page.</p>}
+      {queue.data !== undefined && queue.data.oldMismatches > 0 && (
+        <p role="status" aria-label="Old mismatches">
+          {queue.data.oldMismatches === 1
+            ? "1 mismatch is older than 24 hours."
+            : `${queue.data.oldMismatches.toString()} mismatches are older than 24 hours.`}{" "}
+          <a href="/reconciliation">Open the Reconciliation page</a>
+        </p>
+      )}
       {queue.data && queue.data.total > queue.data.items.length && (
         <p role="status">
           This queue shows {queue.data.items.length} of {queue.data.total} items.
