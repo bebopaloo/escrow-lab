@@ -67,6 +67,8 @@ export default defineConfig({
             WEB_PORT: process.env.E2E_WEB_PORT ?? "",
             PORT: process.env.E2E_API_PORT ?? "",
             CORS_ORIGINS: devURL,
+            // The e2e specs approve Payouts by hand, so the demo loop must not pay first.
+            DEMO_AUTO_APPROVE: "false",
           },
         },
       }),

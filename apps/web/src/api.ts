@@ -7,7 +7,10 @@ import {
   ErrorResponse,
   HealthResponse,
   MilestoneResponse,
+  NoteResponse,
+  NotesResponse,
   PAYMENT_FAILED,
+  PayoutHistoryResponse,
   SessionResponse,
   UsersResponse,
   type CreateDealRequest,
@@ -200,4 +203,44 @@ export async function retryPayout(
     throw new RetryError("The retry failed. Reload the queue to see the current state.");
   }
   return RetryPayoutResponse.parse(await response.json());
+}
+
+export async function fetchPayoutHistory(
+  limit: number,
+  offset: number,
+  signal?: AbortSignal,
+): Promise<PayoutHistoryResponse> {
+  const url = new URL("/api/payouts/mine", window.location.origin);
+  url.searchParams.set("limit", limit.toString());
+  url.searchParams.set("offset", offset.toString());
+  const response = await fetch(url, signal ? { signal } : {});
+  return PayoutHistoryResponse.parse(await readJson(response, 200, "Payout history"));
+}
+
+export async function fetchNotes(dealId: string, signal?: AbortSignal): Promise<NotesResponse> {
+  const response = await fetch(
+    new URL(`/api/deals/${encodeURIComponent(dealId)}/notes`, window.location.origin),
+    signal ? { signal } : {},
+  );
+  return NotesResponse.parse(await readJson(response, 200, "Notes"));
+}
+
+/** The API refused the note, for example because it is empty or too long. */
+export class NoteRefusedError extends Error {}
+
+export async function addNote(
+  dealId: string,
+  text: string,
+  csrfToken: string,
+): Promise<NoteResponse> {
+  const response = await fetch(
+    new URL(`/api/deals/${encodeURIComponent(dealId)}/notes`, window.location.origin),
+    {
+      method: "POST",
+      headers: { "content-type": "application/json", "x-csrf-token": csrfToken },
+      body: JSON.stringify({ text }),
+    },
+  );
+  if (response.status !== 201) throw new NoteRefusedError("The note was not added.");
+  return NoteResponse.parse(await response.json());
 }

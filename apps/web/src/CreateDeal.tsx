@@ -171,6 +171,7 @@ export function CreateDeal({ csrfToken, onCreated, onCancel }: CreateDealProps) 
                   onClick={() => {
                     focusIndex.current = Math.min(index, milestones.length - 2);
                     setMilestones((current) => current.filter((_, position) => position !== index));
+                    setBadAmounts((current) => current.filter((_, position) => position !== index));
                   }}
                 >
                   Remove Milestone {index + 1}

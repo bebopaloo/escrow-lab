@@ -1,6 +1,7 @@
 import { useRef } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { fetchDeal, fundDeal, NotFoundError, PaymentFailedError } from "./api.ts";
+import { DealNotes } from "./DealNotes.tsx";
 import { MilestoneEvidence } from "./MilestoneEvidence.tsx";
 import { formatMoney } from "./money.ts";
 
@@ -64,6 +65,11 @@ export function DealDetail({ id, userId, role, csrfToken, onBack }: DealDetailPr
           <p>
             Total: {formatMoney(deal.data.totalMinor)}. State: {deal.data.state.replace("_", " ")}.
           </p>
+          <p>
+            <a href={`/api/deals/${encodeURIComponent(id)}/audit.csv`} download>
+              Export audit trail
+            </a>
+          </p>
           {canFund && (
             <button
               type="button"
@@ -115,6 +121,7 @@ export function DealDetail({ id, userId, role, csrfToken, onBack }: DealDetailPr
               csrfToken={csrfToken}
             />
           )}
+          {isParticipant && <DealNotes dealId={id} csrfToken={csrfToken} />}
         </>
       )}
     </section>
