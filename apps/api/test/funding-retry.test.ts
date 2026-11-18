@@ -1,6 +1,6 @@
 import { SEED_USERS, schema, seedUsers } from "@escrow-lab/db";
 import { DealResponse } from "@escrow-lab/shared";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { buildApp } from "../src/app.ts";
 import {
@@ -229,6 +229,36 @@ describe("retry a Deal's funding", () => {
       gaps.push(next - jobNow);
     }
     expect(gaps).toEqual([1_000, 2_000, 4_000, 8_000]);
+  });
+
+  it("[CTRL-PAY-02] skips a Deal that another try holds with a row lock", async () => {
+    const t = await begin([{ kind: "lose_reply" }]);
+    const dealId = await t.fundNewDeal();
+    t.advance(2_000);
+    let release: () => void = () => undefined;
+    const held = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    let locked: () => void = () => undefined;
+    const lockedRow = new Promise<void>((resolve) => {
+      locked = resolve;
+    });
+    const holder = database.db.transaction(async (tx) => {
+      await tx.execute(sql`select id from deals where id = ${dealId} for update`);
+      locked();
+      await held;
+    });
+    try {
+      await Promise.race([lockedRow, holder]);
+      await t.job.runOnce({ dealIds: [dealId] });
+      expect(t.chargeKeys).toHaveLength(1);
+    } finally {
+      release();
+      await holder;
+    }
+    await t.job.runOnce({ dealIds: [dealId] });
+    expect(t.chargeKeys).toHaveLength(2);
+    expect((await dealRow(dealId))?.state).toBe("funded");
   });
 
   it("returns the Deal to draft when the rail refuses the charge on a retry", async () => {
