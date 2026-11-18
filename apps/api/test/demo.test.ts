@@ -1,9 +1,9 @@
 import { schema, seedUsers } from "@escrow-lab/db";
 import { eq } from "drizzle-orm";
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { createFakeChain } from "../src/adapters/chain/index.ts";
 import { createDemoLoop } from "../src/demo.ts";
-import { ERIN, startHarness, type TestDatabase } from "./harness.ts";
+import { ALICE, ERIN, startHarness, type TestDatabase } from "./harness.ts";
 import { openTestDatabase } from "./database.ts";
 
 describe("Demo mode loop", () => {
@@ -22,6 +22,9 @@ describe("Demo mode loop", () => {
   });
   beforeEach(() => {
     warnings = [];
+  });
+  afterEach(() => {
+    vi.useRealTimers();
   });
   afterAll(async () => {
     await database.close();
@@ -87,5 +90,76 @@ describe("Demo mode loop", () => {
     }).runOnce();
     expect(warnings).toHaveLength(1);
     expect(await payoutsOf(first)).toEqual([]);
+  });
+
+  it("warns and pays nothing when the named user exists but is not an Approver", async () => {
+    const { first } = await acceptedMilestone();
+    await createDemoLoop({
+      db: database.db,
+      chain: createFakeChain(),
+      log: { warn: (message) => warnings.push(message) },
+      approverId: ALICE,
+    }).runOnce();
+    expect(warnings).toHaveLength(1);
+    expect(await payoutsOf(first)).toEqual([]);
+    expect(await milestoneState(first)).toBe("accepted");
+  });
+
+  it("pays on a timer after start, and stops after stop", async () => {
+    const { first } = await acceptedMilestone();
+    vi.useFakeTimers({ toFake: ["setInterval", "clearInterval"] });
+    const demo = createDemoLoop({
+      db: database.db,
+      chain: createFakeChain(),
+      log: { warn: (message) => warnings.push(message) },
+      intervalMs: 1000,
+    });
+    demo.start();
+    demo.start();
+    await vi.advanceTimersByTimeAsync(1000);
+    await vi.waitFor(async () => {
+      expect(await milestoneState(first)).toBe("paid");
+    });
+    demo.stop();
+    const later = await acceptedMilestone();
+    await vi.advanceTimersByTimeAsync(5000);
+    expect(await payoutsOf(later.first)).toEqual([]);
+  });
+
+  it("passes the error of a timed run that throws to onError, and the next run still happens", async () => {
+    const { first } = await acceptedMilestone();
+    const boom = new Error("chain down");
+    const real = createFakeChain();
+    let fail = true;
+    const chain = {
+      lock: real.lock.bind(real),
+      transfer: async (seller: string, amount: number, key: string) => {
+        if (fail) {
+          fail = false;
+          throw boom;
+        }
+        return real.transfer(seller, amount, key);
+      },
+    };
+    const errors: unknown[] = [];
+    vi.useFakeTimers({ toFake: ["setInterval", "clearInterval"] });
+    const demo = createDemoLoop({
+      db: database.db,
+      chain,
+      log: { warn: (message) => warnings.push(message) },
+      intervalMs: 1000,
+      onError: (error) => errors.push(error),
+    });
+    demo.start();
+    await vi.advanceTimersByTimeAsync(1000);
+    await vi.waitFor(() => {
+      expect(errors).toEqual([boom]);
+    });
+    await vi.advanceTimersByTimeAsync(1000);
+    await vi.waitFor(async () => {
+      expect(await milestoneState(first)).toBe("paid");
+    });
+    demo.stop();
+    expect(errors).toEqual([boom]);
   });
 });
