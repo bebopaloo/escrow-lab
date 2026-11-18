@@ -88,6 +88,7 @@ export const dealRoutes: FastifyPluginCallbackZod<DealsOptions> = (
       ]);
       return reply
         .header("content-type", "text/csv; charset=utf-8")
+        .header("cache-control", "no-store")
         .header("content-disposition", `attachment; filename="audit-${dealId}.csv"`)
         .send(body);
     },

@@ -44,6 +44,12 @@ describe("GET /api/deals/:id/audit.csv", () => {
     expect(actions.sort()).toEqual(events.map((e) => `"${e.action}"`).sort());
   });
 
+  it("tells caches not to store the file", async () => {
+    const response = await csvOf(ALICE);
+    expect(response.statusCode).toBe(200);
+    expect(response.headers["cache-control"]).toBe("no-store");
+  });
+
   it("names the current display name of the user", async () => {
     await database.db
       .update(schema.users)
