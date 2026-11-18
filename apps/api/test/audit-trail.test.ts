@@ -71,6 +71,13 @@ const cases: AuditCase[] = [
     setup: funded,
     trigger: (h, t) => h.sendEvidence(t.first),
   },
+  {
+    action: "add_note",
+    user: CAROL,
+    setup: draft,
+    trigger: (h, t) =>
+      h.call(CAROL, "POST", `/api/deals/${t.dealId}/notes`, { text: "A note for the Buyer." }),
+  },
   { action: "accept", user: ALICE, setup: evidenceSent, trigger: (h, t) => h.accept(t.first) },
   { action: "reject", user: ALICE, setup: evidenceSent, trigger: (h, t) => h.reject(t.first) },
   {

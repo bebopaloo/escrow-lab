@@ -122,3 +122,24 @@ export type RejectEvidenceRequest = z.infer<typeof RejectEvidenceRequest>;
 export const AcceptEvidenceRequest = z.object({}).strict();
 
 export const WRONG_MILESTONE_STATE = "The Milestone is not in the right state for this action.";
+
+export const MAX_NOTE_LENGTH = 1000;
+
+export const AddNoteRequest = z
+  .object({ text: z.string().trim().min(1).max(MAX_NOTE_LENGTH) })
+  .strict();
+export type AddNoteRequest = z.infer<typeof AddNoteRequest>;
+
+export const NoteResponse = z
+  .object({
+    id: z.uuid(),
+    text: z.string(),
+    authorId: z.uuid(),
+    authorName: z.string(),
+    createdAt: z.string(),
+  })
+  .strict();
+export type NoteResponse = z.infer<typeof NoteResponse>;
+
+export const NotesResponse = z.object({ notes: z.array(NoteResponse) }).strict();
+export type NotesResponse = z.infer<typeof NotesResponse>;
