@@ -61,6 +61,31 @@ describe("Profile page", () => {
     await userEvent.type(input, "   ");
     await userEvent.click(screen.getByRole("button", { name: "Save" }));
     expect(await screen.findByRole("alert")).toHaveTextContent(/1 to 60 characters/);
+    expect(input).toHaveAttribute("aria-invalid", "true");
+    expect(input).toHaveAccessibleDescription(/1 to 60 characters/);
+  });
+
+  it("refuses a name that mixes Latin and Cyrillic letters before it sends anything", async () => {
+    signedIn();
+    const input = await openProfile();
+    await userEvent.clear(input);
+    await userEvent.type(input, "\u0410lice Builder");
+    await userEvent.click(screen.getByRole("button", { name: "Save" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent(/no mix of Latin/);
+  });
+
+  it("explains every reason when the API answers 400", async () => {
+    signedIn();
+    server.use(
+      http.patch("*/api/session/user", () =>
+        HttpResponse.json({ error: "Bad request", requestId: "r1" }, { status: 400 }),
+      ),
+    );
+    const input = await openProfile();
+    await userEvent.clear(input);
+    await userEvent.type(input, "Alice Builder");
+    await userEvent.click(screen.getByRole("button", { name: "Save" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent(/no hidden characters/);
   });
 
   it("tells the user when another user has the name", async () => {

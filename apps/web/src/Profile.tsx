@@ -1,10 +1,12 @@
 import { useState, type SubmitEvent } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import type { SessionResponse, SessionUser } from "@escrow-lab/shared";
+import {
+  DISPLAY_NAME_RULE,
+  DisplayName,
+  type SessionResponse,
+  type SessionUser,
+} from "@escrow-lab/shared";
 import { changeDisplayName, DisplayNameError } from "./api.ts";
-
-const MAX_LENGTH = 60;
-const BAD_LENGTH = "Enter a name of 1 to 60 characters.";
 
 export function Profile({ user, csrfToken }: { user: SessionUser; csrfToken: string }) {
   const client = useQueryClient();
@@ -35,13 +37,13 @@ export function Profile({ user, csrfToken }: { user: SessionUser; csrfToken: str
   function submit(event: SubmitEvent) {
     event.preventDefault();
     setSaved(false);
-    const trimmed = name.trim();
-    if (trimmed.length < 1 || trimmed.length > MAX_LENGTH) {
-      setProblem(BAD_LENGTH);
+    const parsed = DisplayName.safeParse(name);
+    if (!parsed.success) {
+      setProblem(DISPLAY_NAME_RULE);
       return;
     }
     setProblem(null);
-    mutation.mutate(trimmed);
+    mutation.mutate(parsed.data);
   }
 
   return (
@@ -49,7 +51,11 @@ export function Profile({ user, csrfToken }: { user: SessionUser; csrfToken: str
       <h2 id="profile-heading" tabIndex={-1}>
         Profile
       </h2>
-      {problem !== null && <p role="alert">{problem}</p>}
+      {problem !== null && (
+        <p id="profile-name-problem" role="alert">
+          {problem}
+        </p>
+      )}
       {saved && <p role="status">The display name is saved.</p>}
       <form onSubmit={submit}>
         <p>
@@ -58,6 +64,8 @@ export function Profile({ user, csrfToken }: { user: SessionUser; csrfToken: str
             id="profile-name"
             type="text"
             value={name}
+            aria-invalid={problem !== null}
+            aria-describedby={problem !== null ? "profile-name-problem" : undefined}
             onChange={(event) => {
               setName(event.target.value);
             }}

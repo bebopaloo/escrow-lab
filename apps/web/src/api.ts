@@ -4,6 +4,7 @@ import {
   RetryPayoutResponse,
   DealListResponse,
   DealResponse,
+  DISPLAY_NAME_RULE,
   ErrorResponse,
   HealthResponse,
   MilestoneResponse,
@@ -219,7 +220,7 @@ export async function changeDisplayName(displayName: string, csrfToken: string) 
     throw new DisplayNameError("Another user has that name. Choose a different name.");
   }
   if (response.status === 400) {
-    throw new DisplayNameError("Enter a name of 1 to 60 characters.");
+    throw new DisplayNameError(DISPLAY_NAME_RULE);
   }
   return SessionUser.parse(await readJson(response, 200, "Change display name"));
 }

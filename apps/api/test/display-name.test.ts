@@ -95,6 +95,8 @@ describe("PATCH /api/session/user", () => {
     ["no name", {}],
     ["a zero-width character", { displayName: "Erin\u200BApprover" }],
     ["a control character", { displayName: "Erin\u0007Approver" }],
+    ["Latin and Cyrillic letters in one name", { displayName: "\u0410lice Builder" }],
+    ["Latin and Greek letters in one name", { displayName: "Alice Bui\u03BFlder" }],
   ])("refuses %s and changes nothing", async (_label, payload) => {
     const response = await rename(ALICE, payload);
     expect(response.statusCode).toBe(400);
