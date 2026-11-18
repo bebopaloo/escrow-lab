@@ -149,6 +149,15 @@ describe("Deal detail", () => {
     expect(within(table).getByText("£600.00")).toBeInTheDocument();
   });
 
+  it("offers the audit trail as a CSV download", async () => {
+    signedInAs(CAROL);
+    renderApp();
+    await userEvent.click(await screen.findByRole("link", { name: /Logo design/ }));
+    const link = await screen.findByRole("link", { name: "Export audit trail" });
+    expect(link).toHaveAttribute("href", `/api/deals/${DEAL_ID}/audit.csv`);
+    expect(link).toHaveAttribute("download");
+  });
+
   it("goes back to the list and moves focus to its heading", async () => {
     signedInAs(ALICE);
     renderApp();
