@@ -679,6 +679,26 @@ describe("Payout history", () => {
     expect(offsets).toEqual(["0", "20"]);
   });
 
+  it("moves focus to the heading after a page change and keeps the buttons while the page loads", async () => {
+    signedInAs(CAROL);
+    server.use(
+      http.get("*/api/payouts/mine", async ({ request }) => {
+        const offset = Number(new URL(request.url).searchParams.get("offset") ?? "0");
+        if (offset > 0) await delay(50);
+        return HttpResponse.json({ ...HISTORY, total: 45, offset });
+      }),
+    );
+    renderApp();
+    await userEvent.click(await screen.findByRole("button", { name: "Payout history" }));
+    await userEvent.click(await screen.findByRole("button", { name: "Next page" }));
+    expect(screen.getByRole("button", { name: "Next page" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Payout history" })).toHaveFocus();
+    await screen.findByText("Showing 21 to 40 of 45 Payouts.");
+    expect(screen.getByRole("heading", { name: "Payout history" })).toHaveFocus();
+    await userEvent.click(screen.getByRole("button", { name: "Previous page" }));
+    expect(screen.getByRole("heading", { name: "Payout history" })).toHaveFocus();
+  });
+
   it("shows the empty state", async () => {
     signedInAs(CAROL);
     server.use(

@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useRef, useState } from "react";
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { fetchPayoutHistory } from "./api.ts";
 import { formatMoney } from "./money.ts";
 
@@ -13,16 +13,18 @@ const dateFormatter = new Intl.DateTimeFormat("en-GB", {
 
 export function PayoutHistory({ onBack }: { onBack: () => void }) {
   const [offset, setOffset] = useState(0);
+  const heading = useRef<HTMLHeadingElement>(null);
   const history = useQuery({
     queryKey: ["payouts", "mine", offset],
     queryFn: ({ signal }) => fetchPayoutHistory(PAGE_SIZE, offset, signal),
+    placeholderData: keepPreviousData,
   });
   const page = history.data;
   const last = page === undefined ? 0 : Math.min(page.offset + page.limit, page.total);
 
   return (
     <section aria-labelledby="payouts-heading">
-      <h2 id="payouts-heading" tabIndex={-1}>
+      <h2 id="payouts-heading" tabIndex={-1} ref={heading}>
         Payout history
       </h2>
       <button type="button" onClick={onBack}>
@@ -64,6 +66,7 @@ export function PayoutHistory({ onBack }: { onBack: () => void }) {
             disabled={page.offset === 0}
             onClick={() => {
               setOffset(Math.max(0, page.offset - PAGE_SIZE));
+              heading.current?.focus();
             }}
           >
             Previous page
@@ -73,6 +76,7 @@ export function PayoutHistory({ onBack }: { onBack: () => void }) {
             disabled={last >= page.total}
             onClick={() => {
               setOffset(page.offset + PAGE_SIZE);
+              heading.current?.focus();
             }}
           >
             Next page
