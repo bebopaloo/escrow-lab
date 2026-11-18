@@ -5,6 +5,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import { openTestDatabase } from "./database.ts";
 import {
   ALICE,
+  BOB,
   CAROL,
   ERIN,
   funded,
@@ -133,6 +134,7 @@ describe("cancel a draft Deal", () => {
     expect((await cancel(h, CAROL, dealId)).statusCode).toBe(403);
     expect((await cancel(h, ERIN, dealId)).statusCode).toBe(403);
     expect((await cancel(h, ALICE, "00000000-0000-4000-8000-0000000000ff")).statusCode).toBe(404);
+    expect((await cancel(h, BOB, dealId)).statusCode).toBe(404);
     expect(await stateOf(dealId)).toBe("draft");
   });
 });
