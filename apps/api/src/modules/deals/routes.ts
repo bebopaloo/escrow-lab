@@ -11,6 +11,7 @@ import {
   NoteResponse,
   NotesResponse,
   PAYMENT_FAILED,
+  PayoutHistoryResponse,
   SELLER_MUST_BE_SELLER,
   WRONG_DEAL_STATE,
 } from "@escrow-lab/shared";
@@ -21,7 +22,7 @@ import type { PaymentRail } from "../../adapters/payment-rail/index.ts";
 import { requireRole } from "../identity/index.ts";
 import { fundDeal } from "./fund.ts";
 import { addNote, listNotes } from "./notes.ts";
-import { createDeal, findDeal, isSeller, listDeals } from "./store.ts";
+import { createDeal, findDeal, isSeller, listDeals, listSellerPayouts } from "./store.ts";
 
 const CREATE_DEAL_LIMIT = 30;
 const FUND_DEAL_LIMIT = 30;
@@ -52,6 +53,19 @@ export const dealRoutes: FastifyPluginCallbackZod<DealsOptions> = (
     async (request) => {
       const { limit, offset } = request.query;
       const page = await listDeals(db, request.user?.id ?? "", limit, offset);
+      return { ...page, limit, offset };
+    },
+  );
+
+  app.get(
+    "/payouts/mine",
+    {
+      onRequest: requireRole(db, "seller"),
+      schema: { querystring: ListDealsQuery, response: { 200: PayoutHistoryResponse } },
+    },
+    async (request) => {
+      const { limit, offset } = request.query;
+      const page = await listSellerPayouts(db, request.user?.id ?? "", limit, offset);
       return { ...page, limit, offset };
     },
   );

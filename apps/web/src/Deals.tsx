@@ -2,8 +2,10 @@ import { useEffect, useRef, useState } from "react";
 import { CreateDeal } from "./CreateDeal.tsx";
 import { DealDetail } from "./DealDetail.tsx";
 import { DealList } from "./DealList.tsx";
+import { PayoutHistory } from "./PayoutHistory.tsx";
 
-type View = { name: "list" } | { name: "create" } | { name: "detail"; id: string };
+type View =
+  { name: "list" } | { name: "create" } | { name: "payouts" } | { name: "detail"; id: string };
 
 export interface DealsProps {
   role: "buyer" | "seller";
@@ -40,8 +42,16 @@ export function Deals({ role, userId, csrfToken }: DealsProps) {
           onCreate={() => {
             setView({ name: "create" });
           }}
+          {...(role === "seller"
+            ? {
+                onPayouts: () => {
+                  setView({ name: "payouts" });
+                },
+              }
+            : {})}
         />
       )}
+      {view.name === "payouts" && <PayoutHistory onBack={toList} />}
       {view.name === "create" && (
         <CreateDeal
           csrfToken={csrfToken}
