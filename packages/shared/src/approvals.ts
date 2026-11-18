@@ -80,3 +80,26 @@ export const ApprovalQueueResponse = z
   })
   .strict();
 export type ApprovalQueueResponse = z.infer<typeof ApprovalQueueResponse>;
+
+export const PayoutHistoryItem = z
+  .object({
+    id: z.uuid(),
+    dealId: z.uuid(),
+    dealTitle: z.string(),
+    milestoneTitle: z.string(),
+    amountMinor: z.number().int(),
+    state: PayoutState,
+    createdAt: z.string(),
+  })
+  .strict();
+export type PayoutHistoryItem = z.infer<typeof PayoutHistoryItem>;
+
+export const PayoutHistoryResponse = z
+  .object({
+    payouts: z.array(PayoutHistoryItem),
+    total: z.number().int(),
+    limit: z.number().int(),
+    offset: z.number().int(),
+  })
+  .strict();
+export type PayoutHistoryResponse = z.infer<typeof PayoutHistoryResponse>;
