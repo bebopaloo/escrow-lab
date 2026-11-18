@@ -94,7 +94,7 @@ export async function buildApp({
   });
 
   await app.register(healthRoutes, { prefix: "/api", db });
-  await app.register(identityRoutes, { prefix: "/api", db });
+  await app.register(identityRoutes, { prefix: "/api", db, signInLimit: config.SIGN_IN_LIMIT });
   await app.register(dealRoutes, { prefix: "/api", db, chain, paymentRail });
   await app.register(milestoneRoutes, { prefix: "/api", db });
   await app.register(approvalRoutes, { prefix: "/api", db, chain });

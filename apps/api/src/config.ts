@@ -21,6 +21,8 @@ const ConfigSchema = z
           .filter((origin) => origin.length > 0),
       ),
     LOG_LEVEL: z.enum(LOG_LEVELS).default("info"),
+    // Sign-ins per minute from one address. The end-to-end suite signs in more often than a person.
+    SIGN_IN_LIMIT: z.coerce.number().int().min(1).max(1000).default(20),
   })
   // The dev script uses the all-zero key. It is not a secret, so production refuses it.
   .refine((config) => config.NODE_ENV !== "production" || config.SESSION_KEY !== ZERO_KEY, {

@@ -24,14 +24,19 @@ declare module "@fastify/secure-session" {
   }
 }
 
-const SIGN_IN_LIMIT = 20;
 const CHANGE_NAME_LIMIT = 30;
 
 export interface IdentityOptions {
   db: Database;
+  /** Sign-ins per minute from one address. */
+  signInLimit: number;
 }
 
-export const identityRoutes: FastifyPluginCallbackZod<IdentityOptions> = (app, { db }, done) => {
+export const identityRoutes: FastifyPluginCallbackZod<IdentityOptions> = (
+  app,
+  { db, signInLimit },
+  done,
+) => {
   const csrf: preHandlerHookHandler = (request, reply, next) => {
     app.csrfProtection(request, reply, next);
   };
@@ -52,7 +57,7 @@ export const identityRoutes: FastifyPluginCallbackZod<IdentityOptions> = (app, {
   app.post(
     "/session",
     {
-      config: { public: true, rateLimit: { max: SIGN_IN_LIMIT, timeWindow: "1 minute" } },
+      config: { public: true, rateLimit: { max: signInLimit, timeWindow: "1 minute" } },
       onRequest: csrf,
       schema: {
         body: SignInRequest,

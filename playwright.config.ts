@@ -67,6 +67,8 @@ export default defineConfig({
             WEB_PORT: process.env.E2E_WEB_PORT ?? "",
             PORT: process.env.E2E_API_PORT ?? "",
             CORS_ORIGINS: devURL,
+            // The specs sign in more than 20 times in a minute from one address.
+            SIGN_IN_LIMIT: "100",
           },
         },
       }),
