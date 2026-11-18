@@ -1,5 +1,10 @@
 import { schema, type Database } from "@escrow-lab/db";
-import type { CreateDealRequest, DealResponse, DealSummary } from "@escrow-lab/shared";
+import type {
+  CreateDealRequest,
+  DealResponse,
+  DealSummary,
+  PayoutHistoryItem,
+} from "@escrow-lab/shared";
 import { and, count, desc, eq, ne, or } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { recordAuditEvent } from "../audit/index.ts";
@@ -105,4 +110,41 @@ export async function findDeal(
     .where(and(eq(schema.deals.id, dealId), ownedBy(userId)));
   if (row === undefined) return undefined;
   return { ...toSummary(row), milestones: await listMilestones(db, dealId) };
+}
+
+/** One page of the Payouts on the Seller's own Deals, newest first. */
+export async function listSellerPayouts(
+  db: Database,
+  sellerId: string,
+  limit: number,
+  offset: number,
+): Promise<{ payouts: PayoutHistoryItem[]; total: number }> {
+  const mine = eq(schema.deals.sellerId, sellerId);
+  const rows = await db
+    .select({
+      id: schema.payouts.id,
+      dealId: schema.deals.id,
+      dealTitle: schema.deals.title,
+      milestoneTitle: schema.milestones.title,
+      amountMinor: schema.milestones.amountMinor,
+      state: schema.payouts.state,
+      createdAt: schema.payouts.createdAt,
+    })
+    .from(schema.payouts)
+    .innerJoin(schema.milestones, eq(schema.milestones.id, schema.payouts.milestoneId))
+    .innerJoin(schema.deals, eq(schema.deals.id, schema.milestones.dealId))
+    .where(mine)
+    .orderBy(desc(schema.payouts.createdAt), desc(schema.payouts.id))
+    .limit(limit)
+    .offset(offset);
+  const [totals] = await db
+    .select({ total: count() })
+    .from(schema.payouts)
+    .innerJoin(schema.milestones, eq(schema.milestones.id, schema.payouts.milestoneId))
+    .innerJoin(schema.deals, eq(schema.deals.id, schema.milestones.dealId))
+    .where(mine);
+  return {
+    payouts: rows.map((row) => ({ ...row, createdAt: row.createdAt.toISOString() })),
+    total: totals?.total ?? 0,
+  };
 }

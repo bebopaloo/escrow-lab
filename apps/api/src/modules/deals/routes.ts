@@ -11,18 +11,22 @@ import {
   NoteResponse,
   NotesResponse,
   PAYMENT_FAILED,
+  PayoutHistoryResponse,
   SELLER_MUST_BE_SELLER,
   WRONG_DEAL_STATE,
 } from "@escrow-lab/shared";
 import type { preHandlerHookHandler } from "fastify";
 import type { FastifyPluginCallbackZod } from "fastify-type-provider-zod";
+import { z } from "zod";
 import type { Chain } from "../../adapters/chain/index.ts";
 import type { PaymentRail } from "../../adapters/payment-rail/index.ts";
+import { listDealAuditEvents } from "../audit/index.ts";
 import { requireRole } from "../identity/index.ts";
 import { cancelDeal } from "./cancel.ts";
+import { toCsv } from "./csv.ts";
 import { fundDeal } from "./fund.ts";
 import { addNote, listNotes } from "./notes.ts";
-import { createDeal, findDeal, isSeller, listDeals } from "./store.ts";
+import { createDeal, findDeal, isSeller, listDeals, listSellerPayouts } from "./store.ts";
 
 const CREATE_DEAL_LIMIT = 30;
 const FUND_DEAL_LIMIT = 30;
@@ -59,6 +63,19 @@ export const dealRoutes: FastifyPluginCallbackZod<DealsOptions> = (
   );
 
   app.get(
+    "/payouts/mine",
+    {
+      onRequest: requireRole(db, "seller"),
+      schema: { querystring: ListDealsQuery, response: { 200: PayoutHistoryResponse } },
+    },
+    async (request) => {
+      const { limit, offset } = request.query;
+      const page = await listSellerPayouts(db, request.user?.id ?? "", limit, offset);
+      return { ...page, limit, offset };
+    },
+  );
+
+  app.get(
     "/deals/:id",
     {
       onRequest: participant,
@@ -70,6 +87,31 @@ export const dealRoutes: FastifyPluginCallbackZod<DealsOptions> = (
         return reply.status(404).send({ error: "Not found", requestId: request.id });
       }
       return deal;
+    },
+  );
+
+  app.get(
+    "/deals/:id/audit.csv",
+    {
+      onRequest: participant,
+      schema: { params: DealIdParams, response: { 200: z.string(), 404: ErrorResponse } },
+    },
+    async (request, reply) => {
+      const dealId = request.params.id;
+      const deal = await findDeal(db, request.user?.id ?? "", dealId);
+      if (deal === undefined) {
+        return reply.status(404).send({ error: "Not found", requestId: request.id });
+      }
+      const events = await listDealAuditEvents(db, dealId);
+      const body = toCsv([
+        ["Time", "User", "Action"],
+        ...events.map((event) => [event.createdAt.toISOString(), event.displayName, event.action]),
+      ]);
+      return reply
+        .header("content-type", "text/csv; charset=utf-8")
+        .header("cache-control", "no-store")
+        .header("content-disposition", `attachment; filename="audit-${dealId}.csv"`)
+        .send(body);
     },
   );
 

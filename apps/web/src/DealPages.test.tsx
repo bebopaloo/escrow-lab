@@ -149,6 +149,15 @@ describe("Deal detail", () => {
     expect(within(table).getByText("£600.00")).toBeInTheDocument();
   });
 
+  it("offers the audit trail as a CSV download", async () => {
+    signedInAs(CAROL);
+    renderApp();
+    await userEvent.click(await screen.findByRole("link", { name: /Logo design/ }));
+    const link = await screen.findByRole("link", { name: "Export audit trail" });
+    expect(link).toHaveAttribute("href", `/api/deals/${DEAL_ID}/audit.csv`);
+    expect(link).toHaveAttribute("download");
+  });
+
   it("goes back to the list and moves focus to its heading", async () => {
     signedInAs(ALICE);
     renderApp();
@@ -621,6 +630,95 @@ describe("Milestone evidence", () => {
     await userEvent.click(await screen.findByRole("button", { name: "Accept the evidence" }));
     expect(await screen.findByRole("button", { name: "Accept the evidence" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "Reject the evidence" })).toBeDisabled();
+  });
+});
+
+describe("Payout history", () => {
+  const HISTORY = {
+    payouts: [
+      {
+        id: "33333333-3333-4333-8333-333333333331",
+        dealId: DEAL_ID,
+        dealTitle: "Logo design",
+        milestoneTitle: "Draft",
+        amountMinor: 40_000,
+        state: "confirmed",
+        createdAt: "2026-11-14T10:00:00.000Z",
+      },
+    ],
+    total: 1,
+    limit: 20,
+    offset: 0,
+  };
+
+  it("shows a Seller their Payouts with the Deal, Milestone, amount, state and time", async () => {
+    signedInAs(CAROL);
+    server.use(http.get("*/api/payouts/mine", () => HttpResponse.json(HISTORY)));
+    renderApp();
+    await userEvent.click(await screen.findByRole("button", { name: "Payout history" }));
+    const heading = await screen.findByRole("heading", { name: "Payout history" });
+    expect(heading).toHaveFocus();
+    const row = within(await screen.findByRole("table")).getByRole("row", { name: /Logo design/ });
+    expect(row).toHaveTextContent("Draft");
+    expect(row).toHaveTextContent("£400.00");
+    expect(row).toHaveTextContent("confirmed");
+    expect(row).toHaveTextContent("14 Nov 2026");
+  });
+
+  it("does not offer the page to a Buyer", async () => {
+    signedInAs(ALICE);
+    renderApp();
+    await screen.findByRole("link", { name: /Logo design/ });
+    expect(screen.queryByRole("button", { name: "Payout history" })).not.toBeInTheDocument();
+  });
+
+  it("pages through the Payouts", async () => {
+    signedInAs(CAROL);
+    const offsets: string[] = [];
+    server.use(
+      http.get("*/api/payouts/mine", ({ request }) => {
+        const offset = new URL(request.url).searchParams.get("offset") ?? "";
+        offsets.push(offset);
+        return HttpResponse.json({ ...HISTORY, total: 45, offset: Number(offset) });
+      }),
+    );
+    renderApp();
+    await userEvent.click(await screen.findByRole("button", { name: "Payout history" }));
+    await userEvent.click(await screen.findByRole("button", { name: "Next page" }));
+    await screen.findByText("Showing 21 to 40 of 45 Payouts.");
+    expect(offsets).toEqual(["0", "20"]);
+  });
+
+  it("moves focus to the heading after a page change and keeps the buttons while the page loads", async () => {
+    signedInAs(CAROL);
+    server.use(
+      http.get("*/api/payouts/mine", async ({ request }) => {
+        const offset = Number(new URL(request.url).searchParams.get("offset") ?? "0");
+        if (offset > 0) await delay(50);
+        return HttpResponse.json({ ...HISTORY, total: 45, offset });
+      }),
+    );
+    renderApp();
+    await userEvent.click(await screen.findByRole("button", { name: "Payout history" }));
+    await userEvent.click(await screen.findByRole("button", { name: "Next page" }));
+    expect(screen.getByRole("button", { name: "Next page" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Payout history" })).toHaveFocus();
+    await screen.findByText("Showing 21 to 40 of 45 Payouts.");
+    expect(screen.getByRole("heading", { name: "Payout history" })).toHaveFocus();
+    await userEvent.click(screen.getByRole("button", { name: "Previous page" }));
+    expect(screen.getByRole("heading", { name: "Payout history" })).toHaveFocus();
+  });
+
+  it("shows the empty state", async () => {
+    signedInAs(CAROL);
+    server.use(
+      http.get("*/api/payouts/mine", () =>
+        HttpResponse.json({ payouts: [], total: 0, limit: 20, offset: 0 }),
+      ),
+    );
+    renderApp();
+    await userEvent.click(await screen.findByRole("button", { name: "Payout history" }));
+    expect(await screen.findByText("You have no Payouts yet.")).toBeVisible();
   });
 });
 

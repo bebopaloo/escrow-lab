@@ -6,9 +6,11 @@ export interface DealListProps {
   canCreate: boolean;
   onOpen: (id: string) => void;
   onCreate: () => void;
+  /** Set for a Seller: opens the Payout history. */
+  onPayouts?: () => void;
 }
 
-export function DealList({ canCreate, onOpen, onCreate }: DealListProps) {
+export function DealList({ canCreate, onOpen, onCreate, onPayouts }: DealListProps) {
   const deals = useQuery({ queryKey: ["deals"], queryFn: ({ signal }) => fetchDeals(signal) });
 
   return (
@@ -19,6 +21,11 @@ export function DealList({ canCreate, onOpen, onCreate }: DealListProps) {
       {canCreate && (
         <button type="button" onClick={onCreate}>
           Create a Deal
+        </button>
+      )}
+      {onPayouts && (
+        <button type="button" onClick={onPayouts}>
+          Payout history
         </button>
       )}
       {deals.isPending && <p role="status">Loading the Deals.</p>}
