@@ -26,9 +26,25 @@ export function MilestoneEvidence({ dealId, milestone, role, csrfToken }: Milest
   const [reasonMissing, setReasonMissing] = useState(false);
   const [evidenceMissing, setEvidenceMissing] = useState(false);
   const [notice, setNotice] = useState("");
+  const [seenState, setSeenState] = useState(milestone.state);
+  // True after a request of this form succeeds, until the Milestone state that it caused arrives.
+  const [ownChange, setOwnChange] = useState(false);
+
+  // A new Milestone state starts a new step: the old text does not apply to it. The notice of
+  // this form's own request stays; the notice of an earlier step goes.
+  if (seenState !== milestone.state) {
+    setSeenState(milestone.state);
+    setEvidence("");
+    setReason("");
+    setReasonMissing(false);
+    setEvidenceMissing(false);
+    if (ownChange) setOwnChange(false);
+    else setNotice("");
+  }
 
   function done(message: string) {
     return async () => {
+      setOwnChange(true);
       setNotice(message);
       await client.invalidateQueries({ queryKey: ["deal", dealId] });
       // The form or the buttons unmount, so focus would go to the body (WCAG 2.4.3).

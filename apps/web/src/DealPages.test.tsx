@@ -324,6 +324,28 @@ describe("Create Deal", () => {
     expect(amount).not.toHaveAttribute("aria-invalid", "true");
     expect(amount.getAttribute("aria-describedby")).not.toContain(alert.id);
   });
+
+  it("removes the amount error together with its Milestone", async () => {
+    signedInAs(ALICE);
+    renderApp();
+    await openForm();
+    await userEvent.selectOptions(await screen.findByLabelText("Seller"), CAROL.id);
+    await userEvent.type(screen.getByLabelText("Deal title"), "Logo design");
+    await userEvent.type(screen.getByLabelText("Total (£)"), "10");
+    await userEvent.click(screen.getByRole("button", { name: "Add a Milestone" }));
+    await userEvent.type(screen.getByLabelText("Milestone 1 title"), "One");
+    await userEvent.type(screen.getByLabelText("Milestone 1 amount (£)"), "abc");
+    await userEvent.type(screen.getByLabelText("Milestone 2 title"), "Two");
+    await userEvent.type(screen.getByLabelText("Milestone 2 amount (£)"), "10");
+    await userEvent.click(screen.getByRole("button", { name: "Create the Deal" }));
+    const alert = await screen.findByRole("alert");
+    expect(screen.getByLabelText("Milestone 1 amount (£)")).toHaveAttribute("aria-invalid", "true");
+    await userEvent.click(screen.getByRole("button", { name: "Remove Milestone 1" }));
+    const amount = screen.getByLabelText("Milestone 1 amount (£)");
+    expect(amount).toHaveValue("10");
+    expect(amount).not.toHaveAttribute("aria-invalid", "true");
+    expect(amount.getAttribute("aria-describedby")).not.toContain(alert.id);
+  });
 });
 
 describe("Fund a Deal", () => {
