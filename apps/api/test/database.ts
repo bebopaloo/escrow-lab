@@ -1,13 +1,13 @@
-import { createHash } from "node:crypto";
-import path from "node:path";
 import { createDatabase, migrateDatabase } from "@escrow-lab/db";
 import { sql } from "drizzle-orm";
+import {
+  CHECKOUT_FOLDER,
+  worktreeDatabaseName as nameOf,
+  worktreeDatabaseUrl as urlOf,
+} from "../../../worktree-env.ts";
 import { loadConfig } from "../src/config.ts";
 
-const REPO_ROOT = path.resolve(import.meta.dirname, "..", "..", "..");
 const DEFAULT_DB_PORT = "41032";
-// Postgres keeps 63 bytes of a name. The prefix takes 9 of them.
-const MAX_SLUG = 54;
 const DUPLICATE_DATABASE = "42P04";
 
 /**
@@ -15,28 +15,17 @@ const DUPLICATE_DATABASE = "42P04";
  * worktree has its own database on the shared local server.
  */
 export function worktreeDatabaseName(folder: string): string {
-  const slug = folder
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "_")
-    .replace(/^_+|_+$/g, "");
-  if (slug === "") {
-    throw new Error(
-      `Cannot name a test database from the folder "${folder}". Set TEST_DATABASE_URL.`,
-    );
-  }
-  if (slug.length <= MAX_SLUG) return `app_test_${slug}`;
-  const hash = createHash("sha256").update(folder).digest("hex").slice(0, 8);
-  return `app_test_${slug.slice(0, MAX_SLUG - hash.length - 1)}_${hash}`;
+  return nameOf("test", folder);
 }
 
 export function worktreeDatabaseUrl(folder: string, dbPort = DEFAULT_DB_PORT): string {
-  return `postgres://app@127.0.0.1:${dbPort}/${worktreeDatabaseName(folder)}`;
+  return urlOf("test", folder, dbPort);
 }
 
 const callerDatabaseUrl = process.env.TEST_DATABASE_URL;
 
 export const TEST_DATABASE_URL =
-  callerDatabaseUrl ?? worktreeDatabaseUrl(path.basename(REPO_ROOT), process.env.DB_PORT);
+  callerDatabaseUrl ?? worktreeDatabaseUrl(CHECKOUT_FOLDER, process.env.DB_PORT);
 
 export const testConfig = loadConfig({
   DATABASE_URL: TEST_DATABASE_URL,
@@ -50,21 +39,47 @@ function errorCode(error: unknown): unknown {
   return "cause" in error ? errorCode(error.cause) : undefined;
 }
 
-// A database that TEST_DATABASE_URL names belongs to the caller, so only the
-// derived database is created here. Two test runs can race to create it.
-async function createTestDatabaseIfMissing(): Promise<void> {
-  if (callerDatabaseUrl !== undefined) return;
-  const server = new URL(TEST_DATABASE_URL);
+async function withMaintenance<T>(
+  databaseUrl: string,
+  run: (db: ReturnType<typeof createDatabase>["db"], name: string) => Promise<T>,
+): Promise<T> {
+  const server = new URL(databaseUrl);
   const name = server.pathname.slice(1);
   server.pathname = "/postgres";
   const maintenance = createDatabase(server.toString());
   try {
-    await maintenance.db.execute(sql`create database ${sql.identifier(name)}`);
-  } catch (error) {
-    if (errorCode(error) !== DUPLICATE_DATABASE) throw error;
+    return await run(maintenance.db, name);
   } finally {
     await maintenance.close();
   }
+}
+
+// A database that TEST_DATABASE_URL names belongs to the caller, so only the
+// derived database is created here. Two test runs can race to create it.
+async function createTestDatabaseIfMissing(): Promise<void> {
+  if (callerDatabaseUrl !== undefined) return;
+  await withMaintenance(TEST_DATABASE_URL, async (db, name) => {
+    try {
+      await db.execute(sql`create database ${sql.identifier(name)}`);
+    } catch (error) {
+      if (errorCode(error) !== DUPLICATE_DATABASE) throw error;
+    }
+  });
+}
+
+/**
+ * Drops the derived test database and creates it again, so that a test run
+ * starts with no rows from an earlier run. A database that TEST_DATABASE_URL
+ * names belongs to the caller (CI has a new server for each job), so it stays.
+ * Run only one test run at a time in a worktree: the drop closes the
+ * connections of any other run.
+ */
+export async function recreateTestDatabase(): Promise<void> {
+  if (callerDatabaseUrl !== undefined) return;
+  await withMaintenance(TEST_DATABASE_URL, async (db, name) => {
+    await db.execute(sql`drop database if exists ${sql.identifier(name)} with (force)`);
+  });
+  await createTestDatabaseIfMissing();
 }
 
 /**
