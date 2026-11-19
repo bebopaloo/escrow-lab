@@ -128,13 +128,22 @@ describe("Demo mode loop", () => {
 
   it("passes the error of a timed run that throws to onError, and the next run still happens", async () => {
     const { first } = await acceptedMilestone();
+    // The chain throws one time, for the doomed Milestone only. The loop has claimed its Payout
+    // before the throw, so the Payout stays `pending` and the loop does not claim it again. The
+    // throw must not hit `first`. Other tests leave accepted Milestones in the shared database,
+    // so the order of the loop is not known: the doomed Milestone makes the throw sure.
+    const { first: doomed } = await acceptedMilestone();
     const boom = new Error("chain down");
     const real = createFakeChain();
     let fail = true;
     const chain = {
       lock: real.lock.bind(real),
       transfer: async (seller: string, amount: number, key: string) => {
-        if (fail) {
+        const [claimed] = await database.db
+          .select({ milestoneId: schema.payouts.milestoneId })
+          .from(schema.payouts)
+          .where(eq(schema.payouts.idempotencyKey, key));
+        if (fail && claimed?.milestoneId === doomed) {
           fail = false;
           throw boom;
         }
