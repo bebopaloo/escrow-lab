@@ -1,5 +1,5 @@
 {
-  "factory_core_version": "0.34.0",
+  "factory_core_version": "0.50.0",
   "identity": "app",
   "operator": "mskai23",
   "engagement_mode": "solo",
@@ -20,7 +20,7 @@
   "compliance": [],
   "stack_pack": {
     "name": "stack-ts",
-    "version": "0.11.0"
+    "version": "0.15.1"
   },
   "controls": {
     "profile": "regulated",

@@ -3,7 +3,7 @@ paths:
   - "**/*.tsx"
   - "**/*.jsx"
 ---
-<!-- stack-ts 0.8.0: from Rule template react. The team owns this file. -->
+<!-- stack-ts 0.15.1: from Rule template react. The team owns this file. -->
 
 # React
 
