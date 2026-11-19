@@ -1,4 +1,4 @@
-<!-- stack-ts 0.8.0: from Rule template fastify-api. The team owns this file. -->
+<!-- stack-ts 0.15.1: from Rule template fastify-api. The team owns this file. -->
 # Fastify API
 
 ## Routes

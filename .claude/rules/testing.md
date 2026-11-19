@@ -1,4 +1,4 @@
-<!-- factory-core 0.9.0: from Rule template testing. The team owns this file. -->
+<!-- factory-core 0.50.0: from Rule template testing. The team owns this file. -->
 # Testing
 
 - Every change ships with tests. Write the failing test first, then the code: use the `tdd` skill.
