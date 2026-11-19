@@ -22,6 +22,7 @@ import type { Chain } from "../../adapters/chain/index.ts";
 import type { PaymentRail } from "../../adapters/payment-rail/index.ts";
 import { listDealAuditEvents } from "../audit/index.ts";
 import { requireRole } from "../identity/index.ts";
+import { cancelDeal } from "./cancel.ts";
 import { toCsv } from "./csv.ts";
 import { fundDeal } from "./fund.ts";
 import { addNote, listNotes } from "./notes.ts";
@@ -29,6 +30,7 @@ import { createDeal, findDeal, isSeller, listDeals, listSellerPayouts } from "./
 
 const CREATE_DEAL_LIMIT = 30;
 const FUND_DEAL_LIMIT = 30;
+const CANCEL_DEAL_LIMIT = 30;
 const ADD_NOTE_LIMIT = 30;
 
 export interface DealsOptions {
@@ -170,6 +172,31 @@ export const dealRoutes: FastifyPluginCallbackZod<DealsOptions> = (
       }
       const deal = await findDeal(db, buyerId, request.params.id);
       if (deal === undefined) throw new Error("The funded Deal cannot be read");
+      return deal;
+    },
+  );
+
+  app.post(
+    "/deals/:id/cancel",
+    {
+      config: { rateLimit: { max: CANCEL_DEAL_LIMIT, timeWindow: "1 minute" } },
+      onRequest: [requireRole(db, "buyer"), csrf],
+      schema: {
+        params: DealIdParams,
+        response: { 200: DealResponse, 404: ErrorResponse, 409: ErrorResponse },
+      },
+    },
+    async (request, reply) => {
+      const buyerId = request.user?.id ?? "";
+      const outcome = await cancelDeal(db, buyerId, request.params.id);
+      if (outcome.kind === "not_found") {
+        return reply.status(404).send({ error: "Not found", requestId: request.id });
+      }
+      if (outcome.kind === "wrong_state") {
+        return reply.status(409).send({ error: WRONG_DEAL_STATE, requestId: request.id });
+      }
+      const deal = await findDeal(db, buyerId, request.params.id);
+      if (deal === undefined) throw new Error("The cancelled Deal cannot be read");
       return deal;
     },
   );

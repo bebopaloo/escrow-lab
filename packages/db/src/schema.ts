@@ -57,7 +57,17 @@ export const deals = pgTable(
       .notNull()
       .default("GBP"),
     state: text("state", {
-      enum: ["draft", "funding", "funding_failed", "funded", "completed"],
+      enum: [
+        "draft",
+        "funding",
+        "funding_failed",
+        "funded",
+        "completed",
+        "cancelled",
+        "refunding",
+        "refund_failed",
+        "refunded",
+      ],
     })
       .notNull()
       .default("draft"),
@@ -73,7 +83,7 @@ export const deals = pgTable(
     check("deals_currency_check", sql`${table.currency} = 'GBP'`),
     check(
       "deals_state_check",
-      sql`${table.state} in ('draft', 'funding', 'funding_failed', 'funded', 'completed')`,
+      sql`${table.state} in ('draft', 'funding', 'funding_failed', 'funded', 'completed', 'cancelled', 'refunding', 'refund_failed', 'refunded')`,
     ),
   ],
 );

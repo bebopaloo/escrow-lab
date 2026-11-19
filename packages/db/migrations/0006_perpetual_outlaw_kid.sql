@@ -1,0 +1,2 @@
+ALTER TABLE "deals" DROP CONSTRAINT "deals_state_check";--> statement-breakpoint
+ALTER TABLE "deals" ADD CONSTRAINT "deals_state_check" CHECK ("deals"."state" in ('draft', 'funding', 'funding_failed', 'funded', 'completed', 'cancelled', 'refunding', 'refund_failed', 'refunded'));
