@@ -69,6 +69,8 @@ export default defineConfig({
             CORS_ORIGINS: devURL,
             // The specs sign in more than 20 times in a minute from one address.
             SIGN_IN_LIMIT: "100",
+            // The e2e specs approve Payouts by hand, so the demo loop must not pay first.
+            DEMO_AUTO_APPROVE: "false",
           },
         },
       }),

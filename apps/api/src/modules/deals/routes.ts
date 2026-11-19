@@ -17,9 +17,12 @@ import {
 } from "@escrow-lab/shared";
 import type { preHandlerHookHandler } from "fastify";
 import type { FastifyPluginCallbackZod } from "fastify-type-provider-zod";
+import { z } from "zod";
 import type { Chain } from "../../adapters/chain/index.ts";
 import type { PaymentRail } from "../../adapters/payment-rail/index.ts";
+import { listDealAuditEvents } from "../audit/index.ts";
 import { requireRole } from "../identity/index.ts";
+import { toCsv } from "./csv.ts";
 import { fundDeal } from "./fund.ts";
 import { addNote, listNotes } from "./notes.ts";
 import { createDeal, findDeal, isSeller, listDeals, listSellerPayouts } from "./store.ts";
@@ -82,6 +85,31 @@ export const dealRoutes: FastifyPluginCallbackZod<DealsOptions> = (
         return reply.status(404).send({ error: "Not found", requestId: request.id });
       }
       return deal;
+    },
+  );
+
+  app.get(
+    "/deals/:id/audit.csv",
+    {
+      onRequest: participant,
+      schema: { params: DealIdParams, response: { 200: z.string(), 404: ErrorResponse } },
+    },
+    async (request, reply) => {
+      const dealId = request.params.id;
+      const deal = await findDeal(db, request.user?.id ?? "", dealId);
+      if (deal === undefined) {
+        return reply.status(404).send({ error: "Not found", requestId: request.id });
+      }
+      const events = await listDealAuditEvents(db, dealId);
+      const body = toCsv([
+        ["Time", "User", "Action"],
+        ...events.map((event) => [event.createdAt.toISOString(), event.displayName, event.action]),
+      ]);
+      return reply
+        .header("content-type", "text/csv; charset=utf-8")
+        .header("cache-control", "no-store")
+        .header("content-disposition", `attachment; filename="audit-${dealId}.csv"`)
+        .send(body);
     },
   );
 

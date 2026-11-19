@@ -104,8 +104,9 @@ The escrow core covers one happy journey and its failures. People who use escrow
 - [ ] `apps/api/test/harness.ts` exports `signIn(app, userId)` and `cookieOf`. Every API test file except `session.test.ts` uses them, and no other copy is left.
 - [ ] Each test checks the same things as before. This change does not lower the test count.
 
-### Remove the flaky retry tests
-- [ ] The tests "skips a Deal that another try holds with a row lock" in `apps/api/test/funding-retry.test.ts` and "skips a Payout that another try holds with a row lock" in `apps/api/test/payout-retry.test.ts` are removed. The end-to-end suite covers retries.
+### Keep the row-lock tests and fix their lock release
+- [ ] The tests "skips a Deal that another try holds with a row lock" in `apps/api/test/funding-retry.test.ts` and "skips a Payout that another try holds with a row lock" in `apps/api/test/payout-retry.test.ts` stay. The project rule forbids the deletion of a test.
+- [ ] Each of the two tests releases its row lock in a `finally` block. The lock is released when the test fails or when the lock holder ends early.
 - [ ] `pnpm test` passes in ten CI runs in a row.
 
 ### Demo mode

@@ -23,11 +23,20 @@ const ConfigSchema = z
     LOG_LEVEL: z.enum(LOG_LEVELS).default("info"),
     // Sign-ins per minute from one address. The end-to-end suite signs in more often than a person.
     SIGN_IN_LIMIT: z.coerce.number().int().min(1).max(1000).default(20),
+    DEMO_AUTO_APPROVE: z.stringbool().optional(),
   })
   // The dev script uses the all-zero key. It is not a secret, so production refuses it.
   .refine((config) => config.NODE_ENV !== "production" || config.SESSION_KEY !== ZERO_KEY, {
     path: ["SESSION_KEY"],
-  });
+  })
+  // Demo mode pays Milestones with no human Approver, so production refuses it.
+  .refine((config) => config.NODE_ENV !== "production" || config.DEMO_AUTO_APPROVE !== true, {
+    path: ["DEMO_AUTO_APPROVE"],
+  })
+  .transform((config) => ({
+    ...config,
+    DEMO_AUTO_APPROVE: config.DEMO_AUTO_APPROVE ?? config.NODE_ENV !== "production",
+  }));
 
 export type Config = z.infer<typeof ConfigSchema>;
 

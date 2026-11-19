@@ -30,18 +30,20 @@ const SUMMARY = {
   state: "draft",
   createdAt: "2026-11-14T10:00:00.000Z",
 };
+/** A Milestone as an action route sends it: the action routes send no Payout. */
+const ACTION_BASE = {
+  id: "22222222-2222-4222-8222-222222222221",
+  position: 1,
+  title: "Draft",
+  amountMinor: 40_000,
+  state: "pending",
+  evidenceText: null,
+  rejectionReason: null,
+};
 const DETAIL = {
   ...SUMMARY,
   milestones: [
-    {
-      id: "22222222-2222-4222-8222-222222222221",
-      position: 1,
-      title: "Draft",
-      amountMinor: 40_000,
-      state: "pending",
-      evidenceText: null,
-      rejectionReason: null,
-    },
+    { ...ACTION_BASE, payout: null },
     {
       id: "22222222-2222-4222-8222-222222222222",
       position: 2,
@@ -50,6 +52,7 @@ const DETAIL = {
       state: "pending",
       evidenceText: null,
       rejectionReason: null,
+      payout: null,
     },
   ],
 };
@@ -147,6 +150,15 @@ describe("Deal detail", () => {
     expect(within(table).getByText("Draft")).toBeInTheDocument();
     expect(within(table).getByText("£400.00")).toBeInTheDocument();
     expect(within(table).getByText("£600.00")).toBeInTheDocument();
+  });
+
+  it("offers the audit trail as a CSV download", async () => {
+    signedInAs(CAROL);
+    renderApp();
+    await userEvent.click(await screen.findByRole("link", { name: /Logo design/ }));
+    const link = await screen.findByRole("link", { name: "Export audit trail" });
+    expect(link).toHaveAttribute("href", `/api/deals/${DEAL_ID}/audit.csv`);
+    expect(link).toHaveAttribute("download");
   });
 
   it("goes back to the list and moves focus to its heading", async () => {
@@ -325,6 +337,68 @@ describe("Create Deal", () => {
     expect(amount).not.toHaveAttribute("aria-invalid", "true");
     expect(amount.getAttribute("aria-describedby")).not.toContain(alert.id);
   });
+
+  it("removes the amount error together with its Milestone", async () => {
+    signedInAs(ALICE);
+    renderApp();
+    await openForm();
+    await userEvent.selectOptions(await screen.findByLabelText("Seller"), CAROL.id);
+    await userEvent.type(screen.getByLabelText("Deal title"), "Logo design");
+    await userEvent.type(screen.getByLabelText("Total (£)"), "10");
+    await userEvent.click(screen.getByRole("button", { name: "Add a Milestone" }));
+    await userEvent.type(screen.getByLabelText("Milestone 1 title"), "One");
+    await userEvent.type(screen.getByLabelText("Milestone 1 amount (£)"), "abc");
+    await userEvent.type(screen.getByLabelText("Milestone 2 title"), "Two");
+    await userEvent.type(screen.getByLabelText("Milestone 2 amount (£)"), "10");
+    await userEvent.click(screen.getByRole("button", { name: "Create the Deal" }));
+    const alert = await screen.findByRole("alert");
+    expect(screen.getByLabelText("Milestone 1 amount (£)")).toHaveAttribute("aria-invalid", "true");
+    await userEvent.click(screen.getByRole("button", { name: "Remove Milestone 1" }));
+    const amount = screen.getByLabelText("Milestone 1 amount (£)");
+    expect(amount).toHaveValue("10");
+    expect(amount).not.toHaveAttribute("aria-invalid", "true");
+    expect(amount.getAttribute("aria-describedby")).not.toContain(alert.id);
+  });
+});
+
+describe("Payout words on the Deal page", () => {
+  const milestone = (position: number, state: string, payout: unknown) => ({
+    ...DETAIL.milestones[0],
+    id: `22222222-2222-4222-8222-22222222223${String(position)}`,
+    position,
+    title: `Step ${String(position)}`,
+    state,
+    payout,
+  });
+  const WITH_PAYOUTS = {
+    ...DETAIL,
+    state: "funded",
+    milestones: [
+      milestone(1, "paid", { state: "confirmed", paidAt: "2026-11-14T23:30:00.000Z" }),
+      milestone(2, "accepted", { state: "pending", paidAt: null }),
+      milestone(3, "accepted", { state: "failed", paidAt: null }),
+      milestone(4, "accepted", null),
+      milestone(5, "pending", null),
+    ],
+  };
+
+  it.each([ALICE, CAROL])("says where each Payout stands to $role", async (user) => {
+    signedInAs(user);
+    server.use(http.get(`*/api/deals/${DEAL_ID}`, () => HttpResponse.json(WITH_PAYOUTS)));
+    renderApp();
+    await userEvent.click(await screen.findByRole("link", { name: /Logo design/ }));
+    const row = async (title: string) =>
+      within(await screen.findByRole("row", { name: new RegExp(title) }));
+    expect((await row("Step 1")).getByText("Paid on 14 November 2026")).toBeVisible();
+    expect((await row("Step 2")).getByText("Payment to the Seller is on its way")).toBeVisible();
+    expect(
+      (await row("Step 3")).getByText("Payment to the Seller failed. An Approver will retry it."),
+    ).toBeVisible();
+    expect((await row("Step 4")).getByText("Waiting for an Approver")).toBeVisible();
+    expect(
+      screen.getAllByText(/Paid on|Payment to the Seller|Waiting for an Approver/),
+    ).toHaveLength(4);
+  });
 });
 
 describe("Fund a Deal", () => {
@@ -454,7 +528,7 @@ describe("Milestone evidence", () => {
         sent = { body: await request.json(), token: request.headers.get("x-csrf-token") };
         serve(withFirst({ state: "evidence_sent", evidenceText: "Link" }));
         return HttpResponse.json({
-          ...DETAIL.milestones[0],
+          ...ACTION_BASE,
           state: "evidence_sent",
           evidenceText: "Link",
         });
@@ -562,7 +636,7 @@ describe("Milestone evidence", () => {
       http.post(`*/api/milestones/${MILESTONE_ID}/accept`, ({ request }) => {
         token = request.headers.get("x-csrf-token");
         serve(withFirst({ state: "accepted", evidenceText: "Here is the link" }));
-        return HttpResponse.json({ ...DETAIL.milestones[0], state: "accepted" });
+        return HttpResponse.json({ ...ACTION_BASE, state: "accepted" });
       }),
     );
     renderApp();
@@ -582,7 +656,7 @@ describe("Milestone evidence", () => {
       http.post(`*/api/milestones/${MILESTONE_ID}/reject`, async ({ request }) => {
         body = await request.json();
         serve(withFirst({ state: "awaiting_evidence", rejectionReason: "Wrong file" }));
-        return HttpResponse.json({ ...DETAIL.milestones[0], state: "awaiting_evidence" });
+        return HttpResponse.json({ ...ACTION_BASE, state: "awaiting_evidence" });
       }),
     );
     renderApp();

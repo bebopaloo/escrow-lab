@@ -66,4 +66,27 @@ describe("loadConfig", () => {
     expect(() => loadConfig(env)).toThrow(/SESSION_KEY/);
     expect(() => loadConfig(env)).not.toThrow(new RegExp(ZERO_KEY));
   });
+
+  it("turns demo auto-approve on by default outside production", () => {
+    expect(loadConfig({ DATABASE_URL, SESSION_KEY }).DEMO_AUTO_APPROVE).toBe(true);
+    expect(loadConfig({ DATABASE_URL, SESSION_KEY, NODE_ENV: "test" }).DEMO_AUTO_APPROVE).toBe(
+      true,
+    );
+  });
+
+  it("turns demo auto-approve off by default in production", () => {
+    const env = { DATABASE_URL, SESSION_KEY, NODE_ENV: "production" };
+    expect(loadConfig(env).DEMO_AUTO_APPROVE).toBe(false);
+  });
+
+  it("reads DEMO_AUTO_APPROVE=false outside production", () => {
+    expect(
+      loadConfig({ DATABASE_URL, SESSION_KEY, DEMO_AUTO_APPROVE: "false" }).DEMO_AUTO_APPROVE,
+    ).toBe(false);
+  });
+
+  it("refuses DEMO_AUTO_APPROVE=true in production", () => {
+    const env = { DATABASE_URL, SESSION_KEY, NODE_ENV: "production", DEMO_AUTO_APPROVE: "true" };
+    expect(() => loadConfig(env)).toThrow(/DEMO_AUTO_APPROVE/);
+  });
 });
