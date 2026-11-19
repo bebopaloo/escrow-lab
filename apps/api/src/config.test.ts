@@ -10,6 +10,7 @@ describe("loadConfig", () => {
     const config = loadConfig({ DATABASE_URL, SESSION_KEY });
     expect(config.HOST).toBe("127.0.0.1");
     expect(config.PORT).toBe(41030);
+    expect(config.SIGN_IN_LIMIT).toBe(20);
   });
 
   it("splits the CORS allow-list", () => {
@@ -29,6 +30,13 @@ describe("loadConfig", () => {
     const secret = "not-a-url-but-a-secret";
     expect(() => loadConfig({ DATABASE_URL: secret, SESSION_KEY })).toThrow(/DATABASE_URL/);
     expect(() => loadConfig({ DATABASE_URL: secret, SESSION_KEY })).not.toThrow(new RegExp(secret));
+  });
+
+  it("reads the sign-in limit and rejects one below 1", () => {
+    expect(loadConfig({ DATABASE_URL, SESSION_KEY, SIGN_IN_LIMIT: "100" }).SIGN_IN_LIMIT).toBe(100);
+    expect(() => loadConfig({ DATABASE_URL, SESSION_KEY, SIGN_IN_LIMIT: "0" })).toThrow(
+      /SIGN_IN_LIMIT/,
+    );
   });
 
   it("rejects a port out of range", () => {

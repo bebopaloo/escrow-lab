@@ -4,6 +4,7 @@ import {
   RetryPayoutResponse,
   DealListResponse,
   DealResponse,
+  DISPLAY_NAME_RULE,
   ErrorResponse,
   HealthResponse,
   MilestoneResponse,
@@ -13,6 +14,7 @@ import {
   PayoutHistoryResponse,
   SessionResponse,
   UsersResponse,
+  SessionUser,
   type CreateDealRequest,
 } from "@escrow-lab/shared";
 
@@ -203,6 +205,24 @@ export async function retryPayout(
     throw new RetryError("The retry failed. Reload the queue to see the current state.");
   }
   return RetryPayoutResponse.parse(await response.json());
+}
+
+/** The API refused the new display name. The message tells the person why. */
+export class DisplayNameError extends Error {}
+
+export async function changeDisplayName(displayName: string, csrfToken: string) {
+  const response = await fetch(new URL("/api/session/user", window.location.origin), {
+    method: "PATCH",
+    headers: { "content-type": "application/json", "x-csrf-token": csrfToken },
+    body: JSON.stringify({ displayName }),
+  });
+  if (response.status === 409) {
+    throw new DisplayNameError("Another user has that name. Choose a different name.");
+  }
+  if (response.status === 400) {
+    throw new DisplayNameError(DISPLAY_NAME_RULE);
+  }
+  return SessionUser.parse(await readJson(response, 200, "Change display name"));
 }
 
 export async function fetchPayoutHistory(
