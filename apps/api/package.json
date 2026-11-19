@@ -6,7 +6,8 @@
     "dev": "SESSION_KEY=${SESSION_KEY:-0000000000000000000000000000000000000000000000000000000000000000} DATABASE_URL=${DATABASE_URL:-postgres://app@127.0.0.1:41032/app} node --watch src/server.ts",
     "start": "node src/server.ts",
     "typecheck": "tsc --noEmit -p .",
-    "test": "vitest run"
+    "test": "vitest run",
+    "e2e:db": "node test/e2e-database.ts"
   },
   "dependencies": {
     "@escrow-lab/db": "workspace:*",
