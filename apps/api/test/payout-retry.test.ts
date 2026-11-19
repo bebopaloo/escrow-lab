@@ -227,11 +227,14 @@ describe("retry a Payout", () => {
       locked();
       await held;
     });
-    await lockedRow;
-    await t.job.runOnce({ dealIds: [dealId] });
-    expect(t.transferKeys).toHaveLength(1);
-    release();
-    await holder;
+    try {
+      await Promise.race([lockedRow, holder]);
+      await t.job.runOnce({ dealIds: [dealId] });
+      expect(t.transferKeys).toHaveLength(1);
+    } finally {
+      release();
+      await holder;
+    }
     await t.job.runOnce({ dealIds: [dealId] });
     expect(t.transferKeys).toHaveLength(2);
     expect((await payoutOf(milestoneId))?.state).toBe("confirmed");

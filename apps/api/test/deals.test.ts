@@ -225,8 +225,29 @@ describe("deals", () => {
     });
     const body = DealListResponse.parse(page.json());
     expect(body.deals).toHaveLength(2);
-    expect(body.total).toBeGreaterThanOrEqual(3);
+    const owned = await database.db
+      .select({ id: schema.deals.id })
+      .from(schema.deals)
+      .where(eq(schema.deals.buyerId, ALICE));
+    expect(body.total).toBe(owned.length);
     expect(body.limit).toBe(2);
+    const second = DealListResponse.parse(
+      (
+        await app.inject({
+          method: "GET",
+          url: "/api/deals?limit=2&offset=2",
+          headers: { cookie: buyer.cookie },
+        })
+      ).json(),
+    );
+    expect(second.offset).toBe(2);
+    expect(second.total).toBe(owned.length);
+    expect(second.deals.length).toBeGreaterThan(0);
+    const firstIds = body.deals.map((deal) => deal.id);
+    for (const deal of second.deals) {
+      expect(firstIds).not.toContain(deal.id);
+      expect(owned.map((row) => row.id)).toContain(deal.id);
+    }
     const tooBig = await app.inject({
       method: "GET",
       url: "/api/deals?limit=101",

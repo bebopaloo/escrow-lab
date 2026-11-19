@@ -37,8 +37,10 @@ interface Claimed {
 }
 
 /**
- * The one retry job. It retries Deals in `funding`, then Payouts in `pending` (`payout-retry.ts`). Each try sends the charge and the lock again with the
- * Deal's stored Idempotency key, so the partners return their first result.
+ * The one retry job. It retries Deals in `funding`, then Payouts in `pending` (`payout-retry.ts`).
+ * A Deal try sends the charge and the lock again with the Deal's stored Idempotency key. A Payout
+ * try sends the transfer again with the Payout's stored Idempotency key. The partners return their
+ * first result.
  */
 export function createFundingRetryJob(options: FundingRetryOptions) {
   const { db, chain, paymentRail } = options;

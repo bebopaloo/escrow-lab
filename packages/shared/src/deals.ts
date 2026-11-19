@@ -59,6 +59,20 @@ export const MilestoneResponse = z
   .strict();
 export type MilestoneResponse = z.infer<typeof MilestoneResponse>;
 
+export const PayoutState = z.enum(["pending", "confirmed", "failed"]);
+export type PayoutState = z.infer<typeof PayoutState>;
+
+/** The Payout of a Milestone. `paidAt` is set only when the Payout is `confirmed`. */
+export const PayoutStatus = z
+  .object({ state: PayoutState, paidAt: z.string().nullable() })
+  .strict();
+export type PayoutStatus = z.infer<typeof PayoutStatus>;
+
+export const DealMilestoneResponse = MilestoneResponse.extend({
+  payout: PayoutStatus.nullable(),
+}).strict();
+export type DealMilestoneResponse = z.infer<typeof DealMilestoneResponse>;
+
 export const DealSummary = z
   .object({
     id: z.uuid(),
@@ -76,7 +90,7 @@ export const DealSummary = z
 export type DealSummary = z.infer<typeof DealSummary>;
 
 export const DealResponse = DealSummary.extend({
-  milestones: z.array(MilestoneResponse),
+  milestones: z.array(DealMilestoneResponse),
 }).strict();
 export type DealResponse = z.infer<typeof DealResponse>;
 
