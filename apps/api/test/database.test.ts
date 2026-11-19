@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
+import { worktreeDatabaseName as e2eNameOf } from "../../../worktree-env.ts";
 import { worktreeDatabaseName, worktreeDatabaseUrl } from "./database.ts";
+
+const e2eName = (folder: string) => e2eNameOf("e2e", folder);
 
 describe("worktreeDatabaseName", () => {
   it("names the database after the checkout folder", () => {
@@ -32,5 +35,12 @@ describe("worktreeDatabaseUrl", () => {
     expect(worktreeDatabaseUrl("shop", "56000")).toBe(
       "postgres://app@127.0.0.1:56000/app_test_shop",
     );
+  });
+});
+
+describe("the end-to-end database", () => {
+  it("has its own name for each folder, apart from the test database", () => {
+    expect(worktreeDatabaseName("7-add-login")).toBe("app_test_7_add_login");
+    expect(e2eName("7-add-login")).toBe("app_e2e_7_add_login");
   });
 });
