@@ -10,11 +10,20 @@ Commands:
   enabled <module> [--repo <path>]  exit 0 when the module is on, 1 when it is off,
                                     2 on an error (an invalid config fails closed)
   settings [--repo <path>]          print the settings, with defaults filled in
+  docs [--repo <path>]              print the `docs` key: the documents that the release
+                                    review checks; exit 1 when the key is invalid
   profile <name>                    print the modules of a Control profile
   catalogue                         print every module, its needs and its profiles
 
+A module can need keys of the repo config too (`needs_keys` in the catalogue). The
+module finding_deferral needs the `releases` key; a config without it is invalid.
+
 The catalogue of modules, settings and profiles is templates/controls/profiles.toml.
 Other factory scripts import `skip_unless` to check their module first.
+
+The optional `docs` key is a list of repo-relative paths of files. Only `docs` and
+`validate` read it: an invalid `docs` key turns no safety check off, so it stops no
+other reader (ADR 0014 covers the `controls` key only).
 
 Prints one JSON document on stdout. On an error: `{"error": ..., "problems": [...]}`
 on stderr.
@@ -62,6 +71,16 @@ def unmet_needs(modules: list[str], catalogue: dict) -> list[str]:
     ]
 
 
+def unmet_keys(modules: list[str], config: dict, catalogue: dict) -> list[str]:
+    return [
+        f"{module} needs the {key} key"
+        for module in modules
+        if module in catalogue["modules"]
+        for key in catalogue["modules"][module].get("needs_keys", [])
+        if not config.get(key)
+    ]
+
+
 def check_catalogue(catalogue: dict) -> list[str]:
     """Problems in the catalogue itself; the tests keep this list empty."""
     modules = catalogue.get("modules", {})
@@ -71,6 +90,10 @@ def check_catalogue(catalogue: dict) -> list[str]:
         for need in module.get("needs", [])
         if need not in modules
     ]
+    for name, module in modules.items():
+        keys = module.get("needs_keys", [])
+        if not isinstance(keys, list) or not all(isinstance(key, str) and key for key in keys):
+            problems.append(f"module {name} has needs_keys that is not a list of key names")
     for name, setting in catalogue.get("settings", {}).items():
         if setting.get("module") not in modules:
             problems.append(f"setting {name} belongs to the unknown module {setting.get('module')}")
@@ -149,6 +172,27 @@ def _read_config(repo: Path) -> dict:
     return config
 
 
+def docs_for(repo: Path) -> list[str]:
+    """The `docs` key: repo-relative paths of files. [] when absent; ConfigError when invalid."""
+    repo = Path(repo)
+    docs = _read_config(repo).get("docs")
+    if docs is None:
+        return []
+    if not isinstance(docs, list) or not all(isinstance(item, str) and item.strip() for item in docs):
+        raise ConfigError("docs must be a list of repo-relative paths")
+    root = repo.resolve()
+    problems = []
+    for item in docs:
+        target = (root / item).resolve()
+        if Path(item).is_absolute() or not target.is_relative_to(root):
+            problems.append(f"docs: {item} is not inside the repo")
+        elif not target.is_file():
+            problems.append(f"docs: {item} is not a file that exists")
+    if problems:
+        raise ConfigError(problems)
+    return docs
+
+
 def resolve(config: dict, catalogue: dict) -> dict:
     """The controls of one repo config: profile, modules, changes from the profile, settings."""
     if "controls" not in config:
@@ -171,6 +215,7 @@ def resolve(config: dict, catalogue: dict) -> dict:
     problems += [f"unknown module {m}" for m in modules if m not in catalogue["modules"]]
     problems += [f"{m} is listed more than once" for m in sorted(set(modules)) if modules.count(m) > 1]
     problems += unmet_needs(modules, catalogue)
+    problems += unmet_keys(modules, config, catalogue)
 
     settings, setting_problems = _settings(controls.get("settings"), catalogue)
     problems += setting_problems
@@ -217,7 +262,7 @@ class _Parser(argparse.ArgumentParser):
 def build_parser() -> argparse.ArgumentParser:
     parser = _Parser(prog="factory_config.py", description=__doc__.splitlines()[0])
     commands = parser.add_subparsers(dest="command", required=True, parser_class=_Parser)
-    for name in ("validate", "settings"):
+    for name in ("validate", "settings", "docs"):
         commands.add_parser(name).add_argument("--repo", default=".")
     enabled = commands.add_parser("enabled")
     enabled.add_argument("module")
@@ -234,6 +279,7 @@ def _catalogue_listing(catalogue: dict) -> dict:
                 "name": name,
                 "summary": module["summary"],
                 "needs": module["needs"],
+                "needs_keys": module.get("needs_keys", []),
                 "profiles": [p for p, profile in catalogue["profiles"].items() if name in profile["modules"]],
                 "settings": [s for s, setting in catalogue["settings"].items() if setting["module"] == name],
             }
@@ -255,6 +301,9 @@ def main(argv: list[str] | None = None, stdout: TextIO = sys.stdout, stderr: Tex
             return 0 if result is None else 1
         if command == "validate":
             result = resolve_repo(Path(args.repo), catalogue)
+            docs_for(Path(args.repo))
+        elif command == "docs":
+            result = {"docs": docs_for(Path(args.repo))}
         elif command == "settings":
             result = resolve_repo(Path(args.repo), catalogue)["settings"]
         elif command == "profile":

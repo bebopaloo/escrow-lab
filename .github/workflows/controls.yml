@@ -67,6 +67,9 @@ jobs:
           python3 .factory/kit/scripts/dependencies.py check --repo . --base "$BASE_SHA" --body-file body.md
       # The work item and its Spec (module traceability). The labels of the issue and of its
       # parent come from the GitHub GraphQL API; the script skips when the module is off.
+      # A Deferred finding issue has no Spec label and no parent. For an issue with the label
+      # `deferred`, the labels of its source issue (the `Source issue: #n` line of its body) and
+      # of the parent of that issue go in the `source` key.
       - name: Traceability
         env:
           TIER: ${{ steps.tier.outputs.tier }}
@@ -79,18 +82,34 @@ jobs:
           if [ "$tier" = "off" ] || [ -z "$tier" ]; then tier=general; fi
           issue=$(python3 .factory/kit/scripts/traceability.py issue --body-file body.md)
           if [ -n "$issue" ]; then
-            gh api graphql -F number="$issue" -f owner="${REPO%%/*}" -f name="${REPO#*/}" -f query='
-              query($owner: String!, $name: String!, $number: Int!) {
-                repository(owner: $owner, name: $name) {
-                  issue(number: $number) {
-                    labels(first: 50) { nodes { name } }
-                    parent { labels(first: 50) { nodes { name } } }
+            fetch_issue() {
+              gh api graphql -F number="$1" -f owner="${REPO%%/*}" -f name="${REPO#*/}" -f query='
+                query($owner: String!, $name: String!, $number: Int!) {
+                  repository(owner: $owner, name: $name) {
+                    issue(number: $number) {
+                      body
+                      labels(first: 50) { nodes { name } }
+                      parent { labels(first: 50) { nodes { name } } }
+                    }
                   }
-                }
-              }' | jq '.data.repository.issue | {
-                issue: [.labels.nodes[].name],
-                parent: (if .parent then [.parent.labels.nodes[].name] else null end)
-              }' > labels.json
+                }'
+            }
+            shape='.data.repository.issue | {
+              issue: [.labels.nodes[].name],
+              parent: (if .parent then [.parent.labels.nodes[].name] else null end)
+            }'
+            fetch_issue "$issue" > issue.json
+            jq "$shape" issue.json > labels.json
+            if jq -e '.issue | index("deferred")' labels.json > /dev/null; then
+              jq -r '.data.repository.issue.body // ""' issue.json > issue-body.md
+              source=$(python3 .factory/kit/scripts/traceability.py source --body-file issue-body.md)
+              if [ -n "$source" ]; then
+                fetch_issue "$source" > source-issue.json
+                jq "$shape" source-issue.json > source-labels.json
+                jq --slurpfile source source-labels.json '. + {source: $source[0]}' labels.json > labels-with-source.json
+                mv labels-with-source.json labels.json
+              fi
+            fi
             python3 .factory/kit/scripts/traceability.py check --repo . --tier "$tier" --body-file body.md --labels-file labels.json
           else
             python3 .factory/kit/scripts/traceability.py check --repo . --tier "$tier" --body-file body.md

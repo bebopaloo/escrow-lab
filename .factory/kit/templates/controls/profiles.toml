@@ -4,6 +4,9 @@
 # the `controls` key of .claude/factory.json; every module is off by default.
 # A profile is only a starting set: the repo config always holds the full list.
 #
+# A module has `needs` (other modules) and may have `needs_keys`: top-level keys
+# of the repo config that must be there, for example `releases`.
+#
 # The order of the modules here is the order in every output.
 
 [modules.risk_tiers]
@@ -62,6 +65,11 @@ needs = ["risk_tiers"]
 summary = "The factory writes Control events, and Foreman shows the control metrics."
 needs = []
 
+[modules.finding_deferral]
+summary = "After review round 3, a few major findings become Deferred finding issues that the factory fixes later, and a Release that carries one without its fix fails review."
+needs = []
+needs_keys = ["releases"]
+
 # Settings. `kind` is one of: integer (with min and max), text, tier (one Risk
 # tier word), tier_levels (a table of Risk tier words and default, each value
 # from min to max).
@@ -97,7 +105,21 @@ module = "release_approval"
 kind = "tier"
 default = "sensitive"
 
-# Profiles. `infrastructure` is in no profile: add it when the repo has Terraform.
+[settings.deferral_max_per_pr]
+module = "finding_deferral"
+kind = "integer"
+min = 1
+max = 20
+default = 3
+
+[settings.deferral_max_open]
+module = "finding_deferral"
+kind = "integer"
+min = 1
+max = 100
+default = 10
+
+# Profiles. `infrastructure` and `finding_deferral` are in no profile: add them by choice.
 
 [profiles.none]
 summary = "No controls. The factory works as before."
