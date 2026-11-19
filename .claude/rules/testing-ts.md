@@ -1,4 +1,4 @@
-<!-- stack-ts 0.8.0: from Rule template testing-ts. The team owns this file. -->
+<!-- stack-ts 0.15.1: from Rule template testing-ts. The team owns this file. -->
 # Testing in TypeScript
 
 The core testing rule says what to test. This rule names the tools for each layer. For the test skeleton and helpers of a layer, load the `stack-ts:test-recipes` skill.
@@ -15,4 +15,5 @@ The core testing rule says what to test. This rule names the tools for each laye
 - API integration tests use a real Postgres database with the migrations applied. Do not mock Drizzle or the database driver.
 - Mock only at the system boundary: other services over HTTP (with `msw`), the clock (`vi.useFakeTimers`) and randomness.
 - Every end-to-end test of a page runs an axe scan and fails on any WCAG 2.2 AA violation.
+- Each test run starts with a new database: the API tests drop and create `app_test_<folder>`, and `pnpm test:e2e` does the same for `app_e2e_<folder>`. A test never depends on a row from an earlier run. Each worktree has its own databases and ports, so builds in parallel worktrees do not clash.
 - Commands: `pnpm test` runs the unit, component and integration tests; `pnpm test:e2e` runs Playwright.

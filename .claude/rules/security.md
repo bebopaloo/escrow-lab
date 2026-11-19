@@ -1,7 +1,7 @@
-<!-- factory-core 0.9.0: from Rule template security. The team owns this file. -->
+<!-- factory-core 0.50.0: from Rule template security. The team owns this file. -->
 # Security
 
-OWASP Top 10 is the minimum standard.
+OWASP Top 10 is the minimum standard. When the `security_criteria` Control module is on, the review checks each change against OWASP ASVS 5.0 at the level of its Risk tier, and each Security finding cites the IDs in review-core's `security-criteria.md` (ADR 0014).
 
 ## Secrets
 
