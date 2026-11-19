@@ -97,7 +97,7 @@ def added(repo: Path, base: str) -> list[dict]:
     return found
 
 
-def _named(dep: str, text: str) -> bool:
+def is_named(dep: str, text: str) -> bool:
     return re.search(rf"(?<![\w@/.-]){re.escape(dep)}(?![\w/.-])", text, re.IGNORECASE) is not None
 
 
@@ -111,7 +111,7 @@ def check(repo: Path, base: str, body: str) -> list[str]:
     return [
         f"{dep['name']} ({dep['manifest']}) is a new direct dependency: name it, with its reason, in the Security section"
         for dep in new
-        if not _named(dep["name"], field)
+        if not is_named(dep["name"], field)
     ]
 
 
