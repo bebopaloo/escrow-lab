@@ -9,6 +9,7 @@ import {
   CAROL,
   ERIN,
   funded,
+  signIn,
   startHarness,
   type Harness,
   type TestDatabase,
@@ -136,5 +137,22 @@ describe("cancel a draft Deal", () => {
     expect((await cancel(h, ALICE, "00000000-0000-4000-8000-0000000000ff")).statusCode).toBe(404);
     expect((await cancel(h, BOB, dealId)).statusCode).toBe(404);
     expect(await stateOf(dealId)).toBe("draft");
+  });
+
+  it("refuses a cancel request without the CSRF token and leaves the Deal a draft", async () => {
+    const h = await start();
+    const { dealId } = await h.createDeal();
+    const { cookie } = await signIn(h.app, ALICE);
+
+    const response = await h.app.inject({
+      method: "POST",
+      url: `/api/deals/${dealId}/cancel`,
+      headers: { cookie },
+      payload: {},
+    });
+
+    expect(response.statusCode).toBe(403);
+    expect(await stateOf(dealId)).toBe("draft");
+    expect(await actionsOf(dealId)).toEqual(["create_deal"]);
   });
 });
