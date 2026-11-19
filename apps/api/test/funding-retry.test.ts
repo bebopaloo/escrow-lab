@@ -248,11 +248,14 @@ describe("retry a Deal's funding", () => {
       locked();
       await held;
     });
-    await lockedRow;
-    await t.job.runOnce({ dealIds: [dealId] });
-    expect(t.chargeKeys).toHaveLength(1);
-    release();
-    await holder;
+    try {
+      await Promise.race([lockedRow, holder]);
+      await t.job.runOnce({ dealIds: [dealId] });
+      expect(t.chargeKeys).toHaveLength(1);
+    } finally {
+      release();
+      await holder;
+    }
     await t.job.runOnce({ dealIds: [dealId] });
     expect(t.chargeKeys).toHaveLength(2);
     expect((await dealRow(dealId))?.state).toBe("funded");
