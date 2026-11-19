@@ -1,12 +1,9 @@
 import { z } from "zod";
-import { DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE } from "./deals.ts";
+import { DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE, PayoutState } from "./deals.ts";
 
 export const WRONG_PAYOUT_STATE = "The Payout cannot be approved in this state.";
 
 export const WRONG_RETRY_STATE = "Only a failed Payout can be retried.";
-
-export const PayoutState = z.enum(["pending", "confirmed", "failed"]);
-export type PayoutState = z.infer<typeof PayoutState>;
 
 /** The body of an approve request: no fields. The amount and the Seller come from the database. */
 export const ApprovePayoutRequest = z.object({}).strict();
