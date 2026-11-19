@@ -92,6 +92,39 @@ describe("Reconciliation", () => {
     expect(offsets).toEqual(["0", "20", "0"]);
   });
 
+  it("keeps the paging buttons and does not claim that the list is empty when a later page is empty", async () => {
+    server.use(
+      http.get("*/api/reconciliation/mismatches", ({ request }) => {
+        const offset = Number(new URL(request.url).searchParams.get("offset"));
+        return offset === 0 ? pageOf([ITEMS[0]], 21, 0, 20) : pageOf([], 1, offset, 20);
+      }),
+    );
+    renderPage();
+    await screen.findByRole("listitem", { name: /Logo design/ });
+    await userEvent.click(screen.getByRole("button", { name: "Next page" }));
+    expect(await screen.findByText(/No mismatches on this page/)).toBeVisible();
+    expect(screen.queryByText("There are no open mismatches.")).toBeNull();
+    expect(screen.getByRole("button", { name: "Previous page" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Next page" })).toBeDisabled();
+  });
+
+  it("keeps the keyboard focus on the paging button while the next page loads", async () => {
+    server.use(
+      http.get("*/api/reconciliation/mismatches", async ({ request }) => {
+        const offset = Number(new URL(request.url).searchParams.get("offset"));
+        if (offset > 0) await new Promise((resolve) => setTimeout(resolve, 50));
+        return pageOf([ITEMS[offset === 0 ? 0 : 1]], 21, offset, 20);
+      }),
+    );
+    renderPage();
+    await screen.findByRole("listitem", { name: /Logo design/ });
+    const next = screen.getByRole("button", { name: "Next page" });
+    await userEvent.click(next);
+    expect(screen.getByRole("button", { name: "Next page" })).toHaveFocus();
+    expect(await screen.findByRole("listitem", { name: /Website/ })).toBeVisible();
+    expect(document.body).not.toHaveFocus();
+  });
+
   it("shows an error when the list cannot be read", async () => {
     server.use(
       http.get("*/api/reconciliation/mismatches", () => new HttpResponse(null, { status: 403 })),

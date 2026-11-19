@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import type { MismatchItem } from "@escrow-lab/shared";
 import { fetchMismatches } from "./api.ts";
 import { formatMoney } from "./money.ts";
@@ -23,6 +23,7 @@ export function Reconciliation() {
   const list = useQuery({
     queryKey: ["mismatches", offset],
     queryFn: ({ signal }) => fetchMismatches(PAGE_SIZE, offset, signal),
+    placeholderData: keepPreviousData,
   });
   const data = list.data;
 
@@ -33,9 +34,12 @@ export function Reconciliation() {
       </h2>
       {list.isPending && <p role="status">Loading the mismatches.</p>}
       {list.isError && <p role="alert">The mismatches cannot be loaded. Reload this page.</p>}
-      {data?.items.length === 0 && <p>There are no open mismatches.</p>}
-      {data !== undefined && data.items.length > 0 && (
+      {data?.total === 0 && <p>There are no open mismatches.</p>}
+      {data !== undefined && data.total > 0 && (
         <>
+          {data.items.length === 0 && (
+            <p>No mismatches on this page. Use Previous page to go back.</p>
+          )}
           <ul>
             {data.items.map((item) => (
               <li key={item.id} aria-labelledby={`mismatch-${item.id}`}>
@@ -54,7 +58,13 @@ export function Reconciliation() {
             ))}
           </ul>
           <p role="status">
-            Showing {data.offset + 1} to {data.offset + data.items.length} of {data.total}.
+            {data.items.length === 0 ? (
+              <>{data.total} open mismatches in total.</>
+            ) : (
+              <>
+                Showing {data.offset + 1} to {data.offset + data.items.length} of {data.total}.
+              </>
+            )}
           </p>
           <button
             type="button"
