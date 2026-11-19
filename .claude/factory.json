@@ -37,12 +37,14 @@
       "release_approval",
       "traceability",
       "release_record",
-      "control_events"
+      "control_events",
+      "finding_deferral"
     ]
   },
   "releases": {
     "production_branch": "production",
     "baseline": "0c61b72cb0963710fc1032b0097b259e7ecedcbb",
     "switched_over": "2026-11-14"
-  }
+  },
+  "factory_login": "bebopaloo-factory[bot]"
 }
