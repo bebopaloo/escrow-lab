@@ -30,9 +30,9 @@ describe("Demo mode loop", () => {
     await database.close();
   });
 
-  async function acceptedMilestone() {
+  async function acceptedMilestone(express = false) {
     const h = await startHarness(database);
-    const { dealId, first, second } = await h.createDeal();
+    const { dealId, first, second } = await h.createDeal({ express });
     await h.step(h.fund(dealId));
     await h.runJob(dealId);
     await h.step(h.sendEvidence(first));
@@ -51,6 +51,18 @@ describe("Demo mode loop", () => {
     const [payout] = await payoutsOf(first);
     expect(payout?.approvedBy).toBe(ERIN);
     expect(payout?.state).toBe("confirmed");
+    expect(await milestoneState(first)).toBe("paid");
+  });
+
+  it("pays an accepted Milestone of an express Deal with the seeded Approver as approver", async () => {
+    const { first } = await acceptedMilestone(true);
+    const [queued] = await payoutsOf(first);
+    expect(queued?.approvedBy).toBeNull();
+    await loop().runOnce();
+    const payouts = await payoutsOf(first);
+    expect(payouts).toHaveLength(1);
+    expect(payouts[0]?.approvedBy).toBe(ERIN);
+    expect(payouts[0]?.state).toBe("confirmed");
     expect(await milestoneState(first)).toBe("paid");
   });
 

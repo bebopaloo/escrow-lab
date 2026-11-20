@@ -98,6 +98,37 @@ describe("express Deals", () => {
     await h.close();
   });
 
+  it("lets one of two concurrent approvals claim the express Payout and send one transfer", async () => {
+    const h = await startHarness(database);
+    const ids = await fundedExpress(h);
+    await h.step(h.accept(ids.first));
+
+    const answers = await Promise.all([h.approve(ids.first), h.approve(ids.first)]);
+    expect(answers.map((a) => a.statusCode).sort()).toEqual([200, 409]);
+    const snapshot = await h.snapshot(ids.dealId);
+    expect(snapshot.payouts.map((p) => [p.state, p.approvedBy])).toEqual([["confirmed", ERIN]]);
+    expect(snapshot.calls.filter((c) => c.method === "transfer")).toHaveLength(1);
+    expect(snapshot.audit.filter((e) => e.action === "approve_payout")).toHaveLength(1);
+    await h.close();
+  });
+
+  it("refuses a second approval after a first try that does not confirm, and sends no second transfer", async () => {
+    const h = await startHarness(database, { chain: [{ kind: "ok" }, ...failures(1)] });
+    const ids = await fundedExpress(h);
+    await h.step(h.accept(ids.first));
+
+    const first = await h.approve(ids.first);
+    expect(first.statusCode).toBe(200);
+    expect(first.json()).toMatchObject({ state: "pending" });
+    expect((await h.snapshot(ids.dealId)).milestones[0]?.state).toBe("accepted");
+    const second = await h.approve(ids.first);
+    expect(second.statusCode).toBe(409);
+    const snapshot = await h.snapshot(ids.dealId);
+    expect(snapshot.calls.filter((c) => c.method === "transfer")).toHaveLength(1);
+    expect(snapshot.audit.filter((e) => e.action === "approve_payout")).toHaveLength(1);
+    await h.close();
+  });
+
   it("keeps the express Payout pending for the retry job when the transfer does not confirm", async () => {
     const h = await startHarness(database, { chain: [{ kind: "ok" }, ...failures(1)] });
     const ids = await fundedExpress(h);
