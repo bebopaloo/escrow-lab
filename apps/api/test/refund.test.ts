@@ -2,7 +2,7 @@ import { schema, seedUsers } from "@escrow-lab/db";
 import { ApprovalQueueResponse } from "@escrow-lab/shared";
 import { eq } from "drizzle-orm";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
-import { confirmPayout } from "../src/modules/payout/index.ts";
+import { confirmPayout, confirmRefund } from "../src/modules/payout/index.ts";
 import { openTestDatabase } from "./database.ts";
 import {
   ALICE,
@@ -242,5 +242,32 @@ describe("Refund a funded Deal", () => {
     expect(after.calls.filter((c) => c.method === "transfer")).toHaveLength(before.length);
     expect(after.payouts[0]?.state).toBe("pending");
     expect(after.ledger.filter((e) => e.kind === "payout")).toEqual([]);
+  });
+  it("[CTRL-PAY-01] confirms a refund only for a refunding Deal that holds the key, so the ledger holds one refund", async () => {
+    const h = await start();
+    const { dealId } = await funded(h);
+    await refund(h, dealId);
+    const key = (await h.snapshot(dealId)).calls.find((c) => c.method === "refund")?.key ?? "";
+
+    const again = await confirmRefund(database.db, { dealId, key, chainTxId: "tx-second" });
+
+    expect(again).toBe(false);
+    const after = await h.snapshot(dealId);
+    expect(after.deal[0]?.state).toBe("refunded");
+    expect(after.ledger.filter((e) => e.kind === "refund")).toHaveLength(1);
+
+    const other = await start(LOST_REPLY);
+    const second = await funded(other);
+    await refund(other, second.dealId);
+    const stale = await confirmRefund(database.db, {
+      dealId: second.dealId,
+      key: "stale-key",
+      chainTxId: "tx-stale",
+    });
+
+    expect(stale).toBe(false);
+    const held = await other.snapshot(second.dealId);
+    expect(held.deal[0]?.state).toBe("refunding");
+    expect(held.ledger.filter((e) => e.kind === "refund")).toEqual([]);
   });
 });
