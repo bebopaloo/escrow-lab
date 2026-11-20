@@ -115,6 +115,19 @@ describe("Deal list", () => {
     expect(await screen.findByText("No Deals match.")).toHaveAttribute("role", "status");
   });
 
+  it("announces the number of Deals that a filter returns in a status region", async () => {
+    signedInAs(ALICE);
+    renderApp();
+    await screen.findByRole("link", { name: /Logo design/ });
+    server.use(
+      http.get("*/api/deals", () =>
+        HttpResponse.json({ deals: [SUMMARY, SUMMARY], total: 2, limit: 100, offset: 0 }),
+      ),
+    );
+    await userEvent.type(screen.getByRole("searchbox", { name: "Search Deals" }), "logo");
+    expect(await screen.findByText("2 Deals found.")).toHaveAttribute("role", "status");
+  });
+
   it("announces loading in a status region", async () => {
     signedInAs(ALICE);
     server.use(

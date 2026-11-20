@@ -21,6 +21,20 @@ export function DealList({ canCreate, onOpen, onCreate, onPayouts }: DealListPro
     queryFn: ({ signal }) => fetchDeals({ q, state }, signal),
   });
 
+  let statusMessage = "";
+  if (deals.isPending) {
+    statusMessage = "Loading the Deals.";
+  } else if (deals.data) {
+    const { total, deals: rows } = deals.data;
+    if (rows.length === 0) {
+      statusMessage = filtered ? "No Deals match." : "You have no Deals yet.";
+    } else if (total > rows.length) {
+      statusMessage = `This list shows ${String(rows.length)} of ${String(total)} Deals.`;
+    } else if (filtered) {
+      statusMessage = `${String(rows.length)} ${rows.length === 1 ? "Deal" : "Deals"} found.`;
+    }
+  }
+
   return (
     <section aria-labelledby="deals-heading">
       <h2 id="deals-heading" tabIndex={-1}>
@@ -70,16 +84,8 @@ export function DealList({ canCreate, onOpen, onCreate, onPayouts }: DealListPro
           </select>
         </label>
       </form>
-      {deals.isPending && <p role="status">Loading the Deals.</p>}
+      <p role="status">{statusMessage}</p>
       {deals.isError && <p role="alert">The Deals cannot be loaded. Reload this page.</p>}
-      {deals.data && deals.data.total > deals.data.deals.length && (
-        <p role="status">
-          This list shows {deals.data.deals.length} of {deals.data.total} Deals.
-        </p>
-      )}
-      {deals.data?.deals.length === 0 && (
-        <p role="status">{filtered ? "No Deals match." : "You have no Deals yet."}</p>
-      )}
       {deals.data && deals.data.deals.length > 0 && (
         <ul>
           {deals.data.deals.map((deal) => (
