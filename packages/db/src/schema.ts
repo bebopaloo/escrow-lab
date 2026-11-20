@@ -79,6 +79,7 @@ export const deals = pgTable(
   (table) => [
     index("deals_buyer_id_idx").on(table.buyerId),
     index("deals_seller_id_idx").on(table.sellerId),
+    index("deals_title_trgm_idx").using("gin", sql`${table.title} gin_trgm_ops`),
     check("deals_total_check", sql`${table.totalMinor} between 1 and 100000000`),
     check("deals_currency_check", sql`${table.currency} = 'GBP'`),
     check(
