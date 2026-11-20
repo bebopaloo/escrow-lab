@@ -78,7 +78,7 @@ export function DealList({ canCreate, onOpen, onCreate, onPayouts }: DealListPro
         </p>
       )}
       {deals.data?.deals.length === 0 && (
-        <p>{filtered ? "No Deals match." : "You have no Deals yet."}</p>
+        <p role="status">{filtered ? "No Deals match." : "You have no Deals yet."}</p>
       )}
       {deals.data && deals.data.deals.length > 0 && (
         <ul>

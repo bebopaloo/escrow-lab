@@ -96,6 +96,25 @@ describe("Deal list", () => {
     expect(await screen.findByText("You have no Deals yet.")).toBeInTheDocument();
   });
 
+  it("announces the empty states in a status region", async () => {
+    signedInAs(ALICE, []);
+    renderApp();
+    expect(await screen.findByText("You have no Deals yet.")).toHaveAttribute("role", "status");
+  });
+
+  it("announces a filter with no match in a status region", async () => {
+    signedInAs(ALICE);
+    renderApp();
+    await screen.findByRole("link", { name: /Logo design/ });
+    server.use(
+      http.get("*/api/deals", () =>
+        HttpResponse.json({ deals: [], total: 0, limit: 100, offset: 0 }),
+      ),
+    );
+    await userEvent.type(screen.getByRole("searchbox", { name: "Search Deals" }), "zzz");
+    expect(await screen.findByText("No Deals match.")).toHaveAttribute("role", "status");
+  });
+
   it("announces loading in a status region", async () => {
     signedInAs(ALICE);
     server.use(
