@@ -39,3 +39,13 @@ export const MismatchListResponse = z
   })
   .strict();
 export type MismatchListResponse = z.infer<typeof MismatchListResponse>;
+
+export const WRONG_FIX_STATE = "Only an open mismatch with a failed Payout can be fixed.";
+
+export const MismatchIdParams = z.object({ id: z.uuid() }).strict();
+
+/** The body of a fix request: no fields. The amount and the transaction come from the mismatch. */
+export const FixMismatchRequest = z.object({}).strict();
+
+export const FixMismatchResponse = z.object({ mismatchId: z.uuid(), payoutId: z.uuid() }).strict();
+export type FixMismatchResponse = z.infer<typeof FixMismatchResponse>;

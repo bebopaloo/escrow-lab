@@ -1,7 +1,7 @@
-import { useState } from "react";
-import { keepPreviousData, useQuery } from "@tanstack/react-query";
+import { useRef, useState } from "react";
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { MismatchItem } from "@escrow-lab/shared";
-import { fetchMismatches } from "./api.ts";
+import { fetchMismatches, fixMismatch } from "./api.ts";
 import { formatMoney } from "./money.ts";
 
 const PAGE_SIZE = 20;
@@ -18,8 +18,20 @@ function formatFound(iso: string): string {
 }
 
 /** The open differences between the ledger and the chain, oldest first. */
-export function Reconciliation() {
+export function Reconciliation({ csrfToken }: { csrfToken: string }) {
+  const client = useQueryClient();
+  const heading = useRef<HTMLHeadingElement>(null);
+  const [notice, setNotice] = useState("");
   const [offset, setOffset] = useState(0);
+  const fix = useMutation({
+    mutationFn: (item: { id: string; title: string }) => fixMismatch(item.id, csrfToken),
+    onSuccess: async (_result, item) => {
+      setNotice(`The mismatch for ${item.title} is fixed.`);
+      await client.invalidateQueries({ queryKey: ["mismatches"] });
+      // The button unmounts, so focus would go to the body (WCAG 2.4.3).
+      heading.current?.focus();
+    },
+  });
   const list = useQuery({
     queryKey: ["mismatches", offset],
     queryFn: ({ signal }) => fetchMismatches(PAGE_SIZE, offset, signal),
@@ -29,9 +41,11 @@ export function Reconciliation() {
 
   return (
     <section aria-labelledby="reconciliation-heading">
-      <h2 id="reconciliation-heading" tabIndex={-1}>
+      <h2 id="reconciliation-heading" tabIndex={-1} ref={heading}>
         Reconciliation
       </h2>
+      {notice !== "" && <p role="status">{notice}</p>}
+      {fix.isError && <p role="alert">{fix.error.message}</p>}
       {list.isPending && <p role="status">Loading the mismatches.</p>}
       {list.isError && <p role="alert">The mismatches cannot be loaded. Reload this page.</p>}
       {data?.total === 0 && <p>There are no open mismatches.</p>}
@@ -54,6 +68,17 @@ export function Reconciliation() {
                     ` Chain amount ${formatMoney(item.chainAmountMinor)}.`}{" "}
                   Found {formatFound(item.foundAt)}.
                 </p>
+                {item.kind === "missing_in_ledger" && item.payoutId !== null && (
+                  <button
+                    type="button"
+                    disabled={fix.isPending}
+                    onClick={() => {
+                      fix.mutate({ id: item.id, title: item.dealTitle });
+                    }}
+                  >
+                    Fix the mismatch for {item.dealTitle}
+                  </button>
+                )}
               </li>
             ))}
           </ul>
