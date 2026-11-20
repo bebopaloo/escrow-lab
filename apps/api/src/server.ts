@@ -3,7 +3,7 @@ import { createChain } from "./adapters/chain/index.ts";
 import { createPaymentRail } from "./adapters/payment-rail/index.ts";
 import { buildApp } from "./app.ts";
 import { loadConfig } from "./config.ts";
-import { createDemoLoop } from "./demo.ts";
+import { startDemoLoopWhenOn } from "./demo.ts";
 import { createFundingRetryJob } from "./modules/payout/index.ts";
 
 const config = loadConfig();
@@ -20,7 +20,7 @@ const fundingRetry = createFundingRetryJob({
   },
 });
 fundingRetry.start();
-const demoLoop = createDemoLoop({
+const demoLoop = startDemoLoopWhenOn(config.DEMO_AUTO_APPROVE, {
   db: database.db,
   chain,
   log: app.log,
@@ -28,10 +28,9 @@ const demoLoop = createDemoLoop({
     app.log.error({ err: error }, "demo loop failed");
   },
 });
-if (config.DEMO_AUTO_APPROVE) demoLoop.start();
 app.addHook("onClose", async () => {
   fundingRetry.stop();
-  demoLoop.stop();
+  demoLoop?.stop();
   await database.close();
 });
 

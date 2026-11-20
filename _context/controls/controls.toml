@@ -17,7 +17,7 @@
 #
 [[control]]
 id = "CTRL-PAY-01"
-title = "No party to a Deal can authorise its Payout: only an Approver can"
+title = "No party to a Deal can authorise its Payout: only an Approver can. Outside production the demo loop may act as the seeded Approver, under CTRL-PAY-03"
 owner = "Operator"
 modules = ["apps/api/src/modules/approval/**", "apps/api/src/modules/payout/**"]
 
@@ -31,6 +31,12 @@ modules = [
   "apps/api/src/modules/ledger/**",
   "apps/api/src/adapters/**",
 ]
+
+[[control]]
+id = "CTRL-PAY-03"
+title = "The demo loop never approves a Payout in production"
+owner = "Operator"
+modules = ["apps/api/src/config.ts", "apps/api/src/demo.ts", "apps/api/src/server.ts"]
 
 [[control]]
 id = "CTRL-LED-01"
