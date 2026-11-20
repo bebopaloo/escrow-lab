@@ -35,6 +35,7 @@ describe("retry a Payout", () => {
         transferKeys.push(key);
         return fake.transfer(seller, amount, key);
       },
+      refund: (buyer, amount, key) => fake.refund(buyer, amount, key),
     };
     const paymentRail = createFakePaymentRail([]);
     const app = await buildApp({
@@ -250,6 +251,7 @@ describe("retry a Payout", () => {
     const auditBefore = await auditActions(dealId);
     const stale: Chain = {
       lock: (deal, amount, key) => t.fake.lock(deal, amount, key),
+      refund: (buyer, amount, key) => t.fake.refund(buyer, amount, key),
       transfer: async () => {
         await database.db
           .update(schema.payouts)

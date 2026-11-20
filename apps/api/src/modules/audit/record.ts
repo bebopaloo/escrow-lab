@@ -14,7 +14,8 @@ export type AuditAction =
   | "funding_confirmed"
   | "funding_failed"
   | "cancel_deal"
-  | "add_note";
+  | "add_note"
+  | "refund_deal";
 
 export interface AuditEvent {
   userId: string;

@@ -210,4 +210,93 @@ describe("ApprovalQueue", () => {
     );
     expect(await screen.findByRole("alert")).toHaveTextContent("The retry failed");
   });
+
+  it("refunds a refundable Deal with the CSRF token, announces it and reloads the queue", async () => {
+    const item = {
+      kind: "refundable",
+      id: DEAL,
+      dealId: DEAL,
+      dealTitle: "Logo design",
+      totalMinor: 100_000,
+    };
+    let refunded = false;
+    let token: string | null = null;
+    server.use(
+      http.get("*/api/approvals", () => page(refunded ? [] : [item])),
+      http.post(`*/api/deals/${DEAL}/refund`, ({ request }) => {
+        token = request.headers.get("x-csrf-token");
+        refunded = true;
+        return HttpResponse.json({ dealId: DEAL, state: "refunded" });
+      }),
+    );
+    renderQueue();
+    const row = await screen.findByRole("listitem", { name: /Logo design/ });
+    expect(within(row).getByText(/£1,000\.00/)).toBeVisible();
+    await userEvent.click(within(row).getByRole("button", { name: "Refund the Deal Logo design" }));
+    expect(await screen.findByText("The Deal Logo design is refunded.")).toHaveAttribute(
+      "role",
+      "status",
+    );
+    expect(token).toBe("token-1");
+    expect(await screen.findByText("Nothing waits for approval.")).toBeVisible();
+  });
+
+  it("says that a refund without a result is still under way", async () => {
+    const item = {
+      kind: "refundable",
+      id: DEAL,
+      dealId: DEAL,
+      dealTitle: "Logo design",
+      totalMinor: 100_000,
+    };
+    server.use(
+      http.get("*/api/approvals", () => page([item])),
+      http.post(`*/api/deals/${DEAL}/refund`, () =>
+        HttpResponse.json({ dealId: DEAL, state: "refunding" }),
+      ),
+    );
+    renderQueue();
+    await userEvent.click(
+      await screen.findByRole("button", { name: "Refund the Deal Logo design" }),
+    );
+    expect(await screen.findByText(/The refund of Logo design is not confirmed yet/)).toBeVisible();
+  });
+
+  it("shows a refund that failed, with no button", async () => {
+    server.use(
+      http.get("*/api/approvals", () =>
+        page([
+          {
+            kind: "refund_failed",
+            id: DEAL,
+            dealId: DEAL,
+            dealTitle: "Logo design",
+            totalMinor: 100_000,
+          },
+        ]),
+      ),
+    );
+    renderQueue();
+    const row = await screen.findByRole("listitem", { name: /Logo design/ });
+    expect(within(row).getByText(/Refund failed/)).toBeVisible();
+    expect(within(row).queryByRole("button")).not.toBeInTheDocument();
+  });
+
+  it("shows an error when the API refuses the refund", async () => {
+    server.use(
+      http.get("*/api/approvals", () =>
+        page([
+          { kind: "refundable", id: DEAL, dealId: DEAL, dealTitle: "Logo design", totalMinor: 1 },
+        ]),
+      ),
+      http.post(`*/api/deals/${DEAL}/refund`, () =>
+        HttpResponse.json({ error: "x", requestId: "r" }, { status: 409 }),
+      ),
+    );
+    renderQueue();
+    await userEvent.click(
+      await screen.findByRole("button", { name: "Refund the Deal Logo design" }),
+    );
+    expect(await screen.findByRole("alert")).toHaveTextContent("The refund failed");
+  });
 });

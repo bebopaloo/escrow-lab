@@ -50,6 +50,13 @@
       "when": 1795044767764,
       "tag": "0006_perpetual_outlaw_kid",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1795161905226,
+      "tag": "0007_tearful_ronan",
+      "breakpoints": true
     }
   ]
 }

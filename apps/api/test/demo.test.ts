@@ -138,6 +138,7 @@ describe("Demo mode loop", () => {
     let fail = true;
     const chain = {
       lock: real.lock.bind(real),
+      refund: real.refund.bind(real),
       transfer: async (seller: string, amount: number, key: string) => {
         const [claimed] = await database.db
           .select({ milestoneId: schema.payouts.milestoneId })

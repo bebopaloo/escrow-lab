@@ -1,1 +1,7 @@
-export { recordDeposit, recordPayout, type NewDeposit, type NewPayout } from "./store.ts";
+export {
+  recordDeposit,
+  recordPayout,
+  recordRefund,
+  type NewDeposit,
+  type NewPayout,
+} from "./store.ts";

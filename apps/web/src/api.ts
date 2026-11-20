@@ -1,6 +1,7 @@
 import {
   ApprovalQueueResponse,
   ApprovePayoutResponse,
+  RefundDealResponse,
   RetryPayoutResponse,
   DealListResponse,
   DealResponse,
@@ -203,6 +204,23 @@ export async function retryPayout(
     throw new RetryError("The retry failed. Reload the queue to see the current state.");
   }
   return RetryPayoutResponse.parse(await response.json());
+}
+
+export class RefundError extends Error {}
+
+export async function refundDeal(dealId: string, csrfToken: string): Promise<RefundDealResponse> {
+  const response = await fetch(
+    new URL(`/api/deals/${encodeURIComponent(dealId)}/refund`, window.location.origin),
+    {
+      method: "POST",
+      headers: { "content-type": "application/json", "x-csrf-token": csrfToken },
+      body: JSON.stringify({}),
+    },
+  );
+  if (response.status !== 200) {
+    throw new RefundError("The refund failed. Reload the queue to see the current state.");
+  }
+  return RefundDealResponse.parse(await response.json());
 }
 
 export async function fetchPayoutHistory(

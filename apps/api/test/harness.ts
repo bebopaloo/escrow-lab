@@ -75,6 +75,10 @@ export async function startHarness(database: TestDatabase, options: HarnessOptio
       calls.push({ partner: "chain", method: "transfer", party: seller, amount, key });
       return fakeChain.transfer(seller, amount, key);
     },
+    refund: (buyer, amount, key) => {
+      calls.push({ partner: "chain", method: "refund", party: buyer, amount, key });
+      return fakeChain.refund(buyer, amount, key);
+    },
   };
   const paymentRail: PaymentRail = {
     charge: (buyer, amount, key) => {

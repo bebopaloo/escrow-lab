@@ -114,7 +114,11 @@ export async function applyMilestoneAction(
 ): Promise<MilestoneOutcome> {
   return db.transaction(async (tx) => {
     const [found] = await tx
-      .select({ dealId: schema.milestones.dealId, state: schema.milestones.state })
+      .select({
+        dealId: schema.milestones.dealId,
+        state: schema.milestones.state,
+        dealState: schema.deals.state,
+      })
       .from(schema.milestones)
       .innerJoin(schema.deals, eq(schema.deals.id, schema.milestones.dealId))
       .where(
@@ -128,7 +132,7 @@ export async function applyMilestoneAction(
       .for("update", { of: schema.milestones });
     if (found === undefined) return { kind: "not_found" };
     const required = action.kind === "send_evidence" ? "awaiting_evidence" : "evidence_sent";
-    if (found.state !== required) return { kind: "wrong_state" };
+    if (found.dealState !== "funded" || found.state !== required) return { kind: "wrong_state" };
 
     const changes =
       action.kind === "send_evidence"

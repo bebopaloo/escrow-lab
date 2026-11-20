@@ -54,6 +54,7 @@ async function start(
       return chain.lock(deal, amount, key);
     },
     transfer: (seller, amount, key) => chain.transfer(seller, amount, key),
+    refund: (buyer, amount, key) => chain.refund(buyer, amount, key),
   };
   const app = await buildApp({
     config: testConfig,
@@ -368,6 +369,7 @@ describe("retry a Deal's funding", () => {
         return { ok: false, failure: "timeout" };
       },
       transfer: (seller, amount, k) => t.chain.transfer(seller, amount, k),
+      refund: (buyer, amount, k) => t.chain.refund(buyer, amount, k),
     };
     const job = createFundingRetryJob({
       db: database.db,
@@ -400,6 +402,7 @@ describe("retry a Deal's funding", () => {
         return { ok: false, failure: "timeout" };
       },
       transfer: (seller, amount, k) => t.chain.transfer(seller, amount, k),
+      refund: (buyer, amount, k) => t.chain.refund(buyer, amount, k),
     };
     const job = createFundingRetryJob({
       db: database.db,

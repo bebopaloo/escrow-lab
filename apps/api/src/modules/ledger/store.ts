@@ -17,6 +17,14 @@ export async function recordDeposit(
   await db.insert(schema.ledgerEntries).values({ ...deposit, kind: "deposit" });
 }
 
+/** Appends the refund of a Deal. Call it only when the chain has confirmed the refund. */
+export async function recordRefund(
+  db: Pick<Database, "insert">,
+  refund: NewDeposit,
+): Promise<void> {
+  await db.insert(schema.ledgerEntries).values({ ...refund, kind: "refund" });
+}
+
 export interface NewPayout {
   dealId: string;
   amountMinor: number;

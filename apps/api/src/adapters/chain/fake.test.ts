@@ -11,6 +11,15 @@ describe("fake chain", () => {
     expect(chain.moved).toBe(700);
   });
 
+  it("refunds the Buyer once for one key, even when the reply is asked for again", async () => {
+    const chain = createFakeChain();
+    const first = await chain.refund("buyer-1", 500, "key-9");
+    const again = await chain.refund("buyer-1", 500, "key-9");
+    expect(first.ok && first.txId.length > 0).toBe(true);
+    expect(again).toEqual(first);
+    expect(chain.moved).toBe(500);
+  });
+
   it("[CTRL-PAY-02] returns the first result for the same key, amount and party", async () => {
     const chain = createFakeChain();
     const first = await chain.lock("deal-1", 500, "key-1");
