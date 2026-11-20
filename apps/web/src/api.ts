@@ -262,3 +262,25 @@ export async function addNote(
   if (response.status !== 201) throw new NoteRefusedError("The note was not added.");
   return NoteResponse.parse(await response.json());
 }
+
+export class ReferenceRefusedError extends Error {}
+
+export async function setPayoutReference(
+  dealId: string,
+  milestoneId: string,
+  reference: string,
+  csrfToken: string,
+): Promise<void> {
+  const response = await fetch(
+    new URL(
+      `/api/deals/${encodeURIComponent(dealId)}/milestones/${encodeURIComponent(milestoneId)}/reference`,
+      window.location.origin,
+    ),
+    {
+      method: "PUT",
+      headers: { "content-type": "application/json", "x-csrf-token": csrfToken },
+      body: JSON.stringify({ reference }),
+    },
+  );
+  if (response.status !== 200) throw new ReferenceRefusedError("The reference was not saved.");
+}

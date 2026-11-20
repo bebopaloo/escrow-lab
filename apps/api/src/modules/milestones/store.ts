@@ -53,6 +53,7 @@ export async function listMilestones(
       evidenceText: schema.milestones.evidenceText,
       rejectionReason: schema.milestones.rejectionReason,
       payoutState: schema.payouts.state,
+      sellerReference: schema.payouts.sellerReference,
       paidAt: schema.ledgerEntries.createdAt,
     })
     .from(schema.milestones)
@@ -67,10 +68,12 @@ export async function listMilestones(
     )
     .where(eq(schema.milestones.dealId, dealId))
     .orderBy(asc(schema.milestones.position));
-  return rows.map(({ payoutState, paidAt, ...milestone }) => ({
+  return rows.map(({ payoutState, paidAt, sellerReference, ...milestone }) => ({
     ...milestone,
     payout:
-      payoutState === null ? null : { state: payoutState, paidAt: paidAt?.toISOString() ?? null },
+      payoutState === null
+        ? null
+        : { state: payoutState, paidAt: paidAt?.toISOString() ?? null, sellerReference },
   }));
 }
 

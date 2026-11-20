@@ -1,5 +1,5 @@
 {
-  "id": "6d256321-3647-4f4d-97d3-11eac4a15cdf",
+  "id": "c4e188f0-eade-4936-aac3-cc9c21df8744",
   "prevId": "20c9ebb0-8ec8-4151-aaef-caa6177ddfea",
   "version": "7",
   "dialect": "postgresql",
@@ -261,25 +261,6 @@
           "primaryKey": false,
           "notNull": false
         },
-        "refund_idempotency_key": {
-          "name": "refund_idempotency_key",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "refund_attempts": {
-          "name": "refund_attempts",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "default": 0
-        },
-        "next_refund_try_at": {
-          "name": "next_refund_try_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": false
-        },
         "created_at": {
           "name": "created_at",
           "type": "timestamp with time zone",
@@ -441,22 +422,6 @@
           "concurrently": false,
           "method": "btree",
           "with": {}
-        },
-        "ledger_entries_one_refund_idx": {
-          "name": "ledger_entries_one_refund_idx",
-          "columns": [
-            {
-              "expression": "deal_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": true,
-          "where": "\"ledger_entries\".\"kind\" = 'refund'",
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
         }
       },
       "foreignKeys": {
@@ -480,7 +445,7 @@
       "checkConstraints": {
         "ledger_entries_kind_check": {
           "name": "ledger_entries_kind_check",
-          "value": "\"ledger_entries\".\"kind\" in ('deposit', 'payout', 'refund')"
+          "value": "\"ledger_entries\".\"kind\" in ('deposit', 'payout')"
         },
         "ledger_entries_amount_check": {
           "name": "ledger_entries_amount_check",
@@ -639,6 +604,12 @@
           "primaryKey": false,
           "notNull": false
         },
+        "seller_reference": {
+          "name": "seller_reference",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
         "created_at": {
           "name": "created_at",
           "type": "timestamp with time zone",
@@ -729,6 +700,10 @@
         "payouts_state_check": {
           "name": "payouts_state_check",
           "value": "\"payouts\".\"state\" in ('pending', 'confirmed', 'failed')"
+        },
+        "payouts_seller_reference_check": {
+          "name": "payouts_seller_reference_check",
+          "value": "\"payouts\".\"seller_reference\" is null or char_length(\"payouts\".\"seller_reference\") <= 40"
         }
       },
       "isRLSEnabled": false
