@@ -77,6 +77,9 @@ export const deals = pgTable(
     fundingIdempotencyKey: text("funding_idempotency_key"),
     fundingAttempts: integer("funding_attempts").notNull().default(0),
     nextFundingTryAt: timestamp("next_funding_try_at", { withTimezone: true }),
+    refundIdempotencyKey: text("refund_idempotency_key"),
+    refundAttempts: integer("refund_attempts").notNull().default(0),
+    nextRefundTryAt: timestamp("next_refund_try_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [
@@ -128,7 +131,7 @@ export const ledgerEntries = pgTable(
     dealId: uuid("deal_id")
       .notNull()
       .references(() => deals.id),
-    kind: text("kind", { enum: ["deposit", "payout"] }).notNull(),
+    kind: text("kind", { enum: ["deposit", "payout", "refund"] }).notNull(),
     amountMinor: integer("amount_minor").notNull(),
     chainTxId: text("chain_tx_id").notNull(),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
@@ -139,7 +142,11 @@ export const ledgerEntries = pgTable(
     uniqueIndex("ledger_entries_one_deposit_idx")
       .on(table.dealId)
       .where(sql`${table.kind} = 'deposit'`),
-    check("ledger_entries_kind_check", sql`${table.kind} in ('deposit', 'payout')`),
+    // A Deal has one refund.
+    uniqueIndex("ledger_entries_one_refund_idx")
+      .on(table.dealId)
+      .where(sql`${table.kind} = 'refund'`),
+    check("ledger_entries_kind_check", sql`${table.kind} in ('deposit', 'payout', 'refund')`),
     check("ledger_entries_amount_check", sql`${table.amountMinor} >= 1`),
   ],
 );

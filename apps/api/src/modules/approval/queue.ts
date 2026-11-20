@@ -1,6 +1,7 @@
 import { schema, type Database } from "@escrow-lab/db";
 import type { ApprovalItem } from "@escrow-lab/shared";
 import { and, count, eq, isNull, notExists, sql } from "drizzle-orm";
+import type { SQL } from "drizzle-orm";
 import { unionAll } from "drizzle-orm/pg-core";
 
 export interface QueuePage {
@@ -9,9 +10,9 @@ export interface QueuePage {
 }
 
 /**
- * The work that waits for an Approver: express Payouts, accepted Milestones, failed Payouts and
- * Deals in `funding_failed`. One query pages the sources together. Express Payouts come first, in
- * the order of their creation.
+ * The work that waits for an Approver: express Payouts, accepted Milestones, failed Payouts, Deals
+ * in `funding_failed`, funded Deals with no Payout (`refundable`) and Deals in `refund_failed`. One
+ * query pages the sources together. Express Payouts come first, in the order of their creation.
  */
 export async function listApprovalQueue(
   db: Database,
@@ -93,8 +94,50 @@ export async function listApprovalQueue(
     .from(schema.deals)
     .where(eq(schema.deals.state, "funding_failed"));
 
-  const [rows, milestoneCount, payoutCount, dealCount, expressCount] = await Promise.all([
-    unionAll(expressRows, milestoneRows, payoutRows, dealRows)
+  const dealItems = (kind: string, where: SQL | undefined) =>
+    db
+      .select({
+        kind: sql<string>`${kind}`.as("kind"),
+        id: sql<string>`${schema.deals.id}`.as("id"),
+        dealId: sql<string>`${schema.deals.id}`.as("deal_id"),
+        dealTitle: sql<string>`${schema.deals.title}`.as("deal_title"),
+        title: sql<string | null>`null`.as("title"),
+        position: sql<number | null>`null`.as("position"),
+        amountMinor: sql<number>`${schema.deals.totalMinor}`.as("amount_minor"),
+        rank: sql<number>`1`.as("rank"),
+        createdAt: sql<Date | null>`null::timestamptz`.as("created_at"),
+      })
+      .from(schema.deals)
+      .where(where);
+  const refundableWhere = and(
+    eq(schema.deals.state, "funded"),
+    notExists(
+      db
+        .select({ one: sql`1` })
+        .from(schema.payouts)
+        .innerJoin(schema.milestones, eq(schema.milestones.id, schema.payouts.milestoneId))
+        .where(eq(schema.milestones.dealId, schema.deals.id)),
+    ),
+  );
+  const refundFailedWhere = eq(schema.deals.state, "refund_failed");
+
+  const [
+    rows,
+    milestoneCount,
+    payoutCount,
+    dealCount,
+    refundableCount,
+    refundFailedCount,
+    expressCount,
+  ] = await Promise.all([
+    unionAll(
+      expressRows,
+      milestoneRows,
+      payoutRows,
+      dealRows,
+      dealItems("refundable", refundableWhere),
+      dealItems("refund_failed", refundFailedWhere),
+    )
       .orderBy(sql`"rank"`, sql`"created_at"`, sql`"kind"`, sql`"deal_title"`, sql`"id"`)
       .limit(limit)
       .offset(offset),
@@ -104,13 +147,19 @@ export async function listApprovalQueue(
       .where(and(eq(schema.milestones.state, "accepted"), hasNoPayout)),
     db.select({ n: count() }).from(schema.payouts).where(eq(schema.payouts.state, "failed")),
     db.select({ n: count() }).from(schema.deals).where(eq(schema.deals.state, "funding_failed")),
+    db.select({ n: count() }).from(schema.deals).where(refundableWhere),
+    db.select({ n: count() }).from(schema.deals).where(refundFailedWhere),
     db.select({ n: count() }).from(schema.payouts).where(expressWaiting),
   ]);
 
   const items = rows.map((row): ApprovalItem => {
     const base = { id: row.id, dealId: row.dealId, dealTitle: row.dealTitle };
-    if (row.kind === "funding_failed") {
-      return { kind: "funding_failed", ...base, totalMinor: row.amountMinor };
+    if (
+      row.kind === "funding_failed" ||
+      row.kind === "refundable" ||
+      row.kind === "refund_failed"
+    ) {
+      return { kind: row.kind, ...base, totalMinor: row.amountMinor };
     }
     if (row.title === null || row.position === null) {
       throw new Error("A queue row has no Milestone");
@@ -123,10 +172,15 @@ export async function listApprovalQueue(
       amountMinor: row.amountMinor,
     };
   });
-  const total =
-    (milestoneCount[0]?.n ?? 0) +
-    (payoutCount[0]?.n ?? 0) +
-    (dealCount[0]?.n ?? 0) +
-    (expressCount[0]?.n ?? 0);
+  const total = [
+    milestoneCount,
+    payoutCount,
+    dealCount,
+    refundableCount,
+    refundFailedCount,
+    expressCount,
+  ]
+    .map((counted) => counted[0]?.n ?? 0)
+    .reduce((sum, n) => sum + n, 0);
   return { items, total };
 }

@@ -1,7 +1,7 @@
 import { useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { ApprovalItem } from "@escrow-lab/shared";
-import { approvePayout, fetchApprovals, retryPayout } from "./api.ts";
+import { approvePayout, fetchApprovals, refundDeal, retryPayout } from "./api.ts";
 import { formatMoney } from "./money.ts";
 
 export interface ApprovalQueueProps {
@@ -15,6 +15,17 @@ function ItemBody({ item }: { item: ApprovalItem }) {
       <>
         <strong id={headingId}>{item.dealTitle}</strong>
         <p>Funding failed. The Deal total is {formatMoney(item.totalMinor)}.</p>
+      </>
+    );
+  }
+  if (item.kind === "refundable" || item.kind === "refund_failed") {
+    return (
+      <>
+        <strong id={headingId}>{item.dealTitle}</strong>
+        <p>
+          {item.kind === "refund_failed" ? "Refund failed. " : "Funded, with no Payout. "}
+          The Deal total is {formatMoney(item.totalMinor)}.
+        </p>
       </>
     );
   }
@@ -65,6 +76,19 @@ export function ApprovalQueue({ csrfToken }: ApprovalQueueProps) {
     },
   });
 
+  const refund = useMutation({
+    mutationFn: (item: { id: string; title: string }) => refundDeal(item.id, csrfToken),
+    onSuccess: async (result, item) => {
+      setNotice(
+        result.state === "refunded"
+          ? `The Deal ${item.title} is refunded.`
+          : `The refund of ${item.title} is not confirmed yet. The app will try again.`,
+      );
+      await client.invalidateQueries({ queryKey: ["approvals"] });
+      heading.current?.focus();
+    },
+  });
+
   return (
     <section aria-labelledby="approval-queue-heading">
       <h2 id="approval-queue-heading" tabIndex={-1} ref={heading}>
@@ -73,6 +97,7 @@ export function ApprovalQueue({ csrfToken }: ApprovalQueueProps) {
       {notice !== "" && <p role="status">{notice}</p>}
       {approve.isError && <p role="alert">{approve.error.message}</p>}
       {retry.isError && <p role="alert">{retry.error.message}</p>}
+      {refund.isError && <p role="alert">{refund.error.message}</p>}
       {queue.isPending && <p role="status">Loading the approval queue.</p>}
       {queue.isError && <p role="alert">The approval queue cannot be loaded. Reload this page.</p>}
       {queue.data && queue.data.total > queue.data.items.length && (
@@ -109,6 +134,17 @@ export function ApprovalQueue({ csrfToken }: ApprovalQueueProps) {
                   }}
                 >
                   Retry the Payout for {item.title}
+                </button>
+              )}
+              {item.kind === "refundable" && (
+                <button
+                  type="button"
+                  disabled={refund.isPending}
+                  onClick={() => {
+                    refund.mutate({ id: item.id, title: item.dealTitle });
+                  }}
+                >
+                  Refund the Deal {item.dealTitle}
                 </button>
               )}
             </li>

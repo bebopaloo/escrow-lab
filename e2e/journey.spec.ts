@@ -92,7 +92,11 @@ test("a Buyer, a Seller and an Approver take a two-Milestone Deal from creation 
     // The Approver approves the Payout.
     await approver.goto("/");
     await expect(approver.getByRole("heading", { name: "Approval queue" })).toBeVisible();
-    const entry = approver.getByRole("listitem").filter({ hasText: title });
+    // The Deal is funded with no Payout, so it also has a refundable item. Pick the Milestone item.
+    const entry = approver
+      .getByRole("listitem")
+      .filter({ has: approver.getByRole("button", { name: `Approve the Payout for ${name}` }) })
+      .filter({ hasText: title });
     await expect(entry).toBeVisible();
     await scan(approver);
     await entry.getByRole("button", { name: `Approve the Payout for ${name}` }).click();

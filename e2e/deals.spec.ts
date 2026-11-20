@@ -131,7 +131,11 @@ test("a Seller sends evidence, the Buyer rejects it, then accepts the new eviden
   await page.getByRole("button", { name: "Sign out" }).click();
   await page.getByRole("button", { name: /Erin Approver/ }).click();
   await expect(page.getByRole("heading", { name: "Approval queue" })).toBeVisible();
-  const entry = page.getByRole("listitem").filter({ hasText: title });
+  // The Deal is funded with no Payout, so it also has a refundable item. Pick the Milestone item.
+  const entry = page
+    .getByRole("listitem")
+    .filter({ hasText: `Milestone 1: Draft` })
+    .filter({ hasText: title });
   await expect(entry).toBeVisible();
   const queueScan = await new AxeBuilder({ page }).withTags(WCAG_22_AA).analyze();
   expect(queueScan.violations).toEqual([]);

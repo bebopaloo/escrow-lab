@@ -4,6 +4,7 @@ import type { Chain } from "../../adapters/chain/index.ts";
 import type { PaymentRail } from "../../adapters/payment-rail/index.ts";
 import { recordAuditEvent } from "../audit/index.ts";
 import { createPayoutRetry } from "./payout-retry.ts";
+import { createRefundRetry } from "./refund-retry.ts";
 import { backToDraft, confirmFunding } from "../deals/index.ts";
 
 export const MAX_FUNDING_TRIES = 5;
@@ -37,9 +38,11 @@ interface Claimed {
 }
 
 /**
- * The one retry job. It retries Deals in `funding`, then Payouts in `pending` (`payout-retry.ts`).
+ * The one retry job. It retries Deals in `funding`, then Payouts in `pending` (`payout-retry.ts`),
+ * then Deals in `refunding` (`refund-retry.ts`).
  * A Deal try sends the charge and the lock again with the Deal's stored Idempotency key. A Payout
- * try sends the transfer again with the Payout's stored Idempotency key. The partners return their
+ * try sends the transfer again with the Payout's stored Idempotency key. A refund try sends the
+ * refund again with the Deal's refund key. The partners return their
  * first result.
  */
 export function createFundingRetryJob(options: FundingRetryOptions) {
@@ -49,6 +52,7 @@ export function createFundingRetryJob(options: FundingRetryOptions) {
   let timer: ReturnType<typeof setInterval> | undefined;
   let running: Promise<void> = Promise.resolve();
   const payoutRetry = createPayoutRetry({ db, chain, now });
+  const refundRetry = createRefundRetry({ db, chain, now });
 
   /**
    * Takes a row lock on the Deal, skips it when another try holds it, and leases it by moving its
@@ -155,6 +159,7 @@ export function createFundingRetryJob(options: FundingRetryOptions) {
       if (deal !== undefined) await tryDeal(deal);
     }
     await payoutRetry.run(filter.dealIds);
+    await refundRetry.run(filter.dealIds);
   }
 
   const job = {

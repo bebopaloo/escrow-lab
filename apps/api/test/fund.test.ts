@@ -54,6 +54,7 @@ async function startApp(
       return chain.lock(deal, amount, key);
     },
     transfer: (seller, amount, key) => chain.transfer(seller, amount, key),
+    refund: (buyer, amount, key) => chain.refund(buyer, amount, key),
   };
   const app = await buildApp({
     config: testConfig,

@@ -102,6 +102,7 @@ describe("Approve a Payout", () => {
         transfers.push({ seller, amount, key });
         return fake.transfer(seller, amount, key);
       },
+      refund: (buyer, amount, key) => fake.refund(buyer, amount, key),
     };
     app = await buildApp({ config: testConfig, db: database.db, logger: false, chain });
   });
@@ -286,7 +287,12 @@ describe("Approve a Payout", () => {
       const page = ApprovalQueueResponse.parse(body);
       const mine = new Set([accepted.dealId, failedPayout.dealId, failedDeal.dealId]);
       const items = page.items.filter((item) => mine.has(item.dealId));
-      expect(items).toHaveLength(3);
+      // The accepted Milestone, the failed Payout, the failed Deal, and the accepted Milestone's
+      // Deal, which is funded with no Payout and so can be refunded.
+      expect(items).toHaveLength(4);
+      expect(items).toContainEqual(
+        expect.objectContaining({ kind: "refundable", id: accepted.dealId, totalMinor: 100_000 }),
+      );
       expect(items).toContainEqual(
         expect.objectContaining({
           kind: "milestone",

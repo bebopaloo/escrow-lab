@@ -17,6 +17,16 @@ export const ApprovePayoutResponse = z
   .strict();
 export type ApprovePayoutResponse = z.infer<typeof ApprovePayoutResponse>;
 
+export const WRONG_REFUND_STATE = "Only a funded Deal with no Payout can be refunded.";
+
+/** The body of a refund request: no fields. The amount and the Buyer come from the database. */
+export const RefundDealRequest = z.object({}).strict();
+
+export const RefundDealResponse = z
+  .object({ dealId: z.uuid(), state: z.enum(["refunding", "refunded"]) })
+  .strict();
+export type RefundDealResponse = z.infer<typeof RefundDealResponse>;
+
 export const PayoutIdParams = z.object({ id: z.uuid() }).strict();
 
 /** The body of a retry request: no fields. The Payout keeps its Idempotency key. */
@@ -63,6 +73,23 @@ export const ApprovalItem = z.discriminatedUnion("kind", [
   z
     .object({
       kind: z.literal("funding_failed"),
+      id: z.uuid(),
+      ...QueueBase,
+      totalMinor: z.number().int(),
+    })
+    .strict(),
+  /** A funded Deal with no Payout. The Deal id is the item id. */
+  z
+    .object({
+      kind: z.literal("refundable"),
+      id: z.uuid(),
+      ...QueueBase,
+      totalMinor: z.number().int(),
+    })
+    .strict(),
+  z
+    .object({
+      kind: z.literal("refund_failed"),
       id: z.uuid(),
       ...QueueBase,
       totalMinor: z.number().int(),

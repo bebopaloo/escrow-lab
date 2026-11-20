@@ -141,7 +141,7 @@ export async function applyMilestoneAction(
       .for("update", { of: schema.milestones });
     if (found === undefined) return { kind: "not_found" };
     const required = action.kind === "send_evidence" ? "awaiting_evidence" : "evidence_sent";
-    if (found.state !== required) return { kind: "wrong_state" };
+    if (found.dealState !== "funded" || found.state !== required) return { kind: "wrong_state" };
 
     const changes =
       action.kind === "send_evidence"
@@ -160,7 +160,7 @@ export async function applyMilestoneAction(
       action: action.kind,
       dealId: found.dealId,
     });
-    if (action.kind === "accept" && found.express && found.dealState === "funded") {
+    if (action.kind === "accept" && found.express) {
       await createPendingPayout(tx, { milestoneId, express: true });
       await recordAuditEvent(tx, {
         userId: action.buyerId,
