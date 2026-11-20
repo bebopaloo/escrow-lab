@@ -45,6 +45,7 @@ describe("the approve rate limit", () => {
       sellerId: CAROL,
       title: "Logo design",
       totalMinor: 1000,
+      express: false,
       milestones: [{ title: "All", amountMinor: 1000 }],
     });
     const dealId = DealResponse.parse(created.json()).id;

@@ -2,7 +2,12 @@ import { schema, type Database } from "@escrow-lab/db";
 import { eq } from "drizzle-orm";
 import type { Chain } from "../../adapters/chain/index.ts";
 import { recordAuditEvent } from "../audit/index.ts";
-import { confirmPayout, createPendingPayout, hasPayout } from "../payout/index.ts";
+import {
+  approveExpressPayout,
+  confirmPayout,
+  createPendingPayout,
+  hasPayout,
+} from "../payout/index.ts";
 
 export type ApproveOutcome =
   | { kind: "not_found" }
@@ -14,7 +19,8 @@ export type ApproveOutcome =
 
 /**
  * Approves the Payout of an accepted Milestone. Transaction one locks the Deal row and the Milestone row, checks
- * Dual control and the state, and writes the `pending` Payout with its Idempotency key and the
+ * Dual control and the state, and writes the `pending` Payout (or, for an express Payout that
+ * waits in the queue, sets its approver) with its Idempotency key and the
  * audit event. The first transfer try then runs outside any transaction, with the Seller and the
  * amount from the database. A confirmed transfer finishes the Payout; any other result leaves it
  * `pending`.
@@ -55,14 +61,15 @@ export async function approvePayout(
     if (found.buyerId === approverId || found.sellerId === approverId) {
       return { kind: "forbidden" } as const;
     }
-    if (
-      found.state !== "accepted" ||
-      found.dealState !== "funded" ||
-      (await hasPayout(tx, milestoneId))
-    ) {
+    if (found.state !== "accepted" || found.dealState !== "funded") {
       return { kind: "wrong_state" } as const;
     }
-    const payout = await createPendingPayout(tx, { milestoneId, approvedBy: approverId });
+    // An express Payout already exists with no approver: this Approver becomes its approver.
+    // Any other Payout blocks the approval.
+    const payout = (await hasPayout(tx, milestoneId))
+      ? await approveExpressPayout(tx, { milestoneId, approverId })
+      : await createPendingPayout(tx, { milestoneId, approvedBy: approverId });
+    if (payout === undefined) return { kind: "wrong_state" } as const;
     await recordAuditEvent(tx, {
       userId: approverId,
       action: "approve_payout",

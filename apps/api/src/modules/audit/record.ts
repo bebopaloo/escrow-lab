@@ -6,6 +6,7 @@ export type AuditAction =
   | "fund"
   | "send_evidence"
   | "accept"
+  | "express_payout"
   | "reject"
   | "approve_payout"
   | "retry_payout"

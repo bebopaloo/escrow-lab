@@ -75,6 +75,20 @@ describe("ApprovalQueue", () => {
     expect(within(deal).queryByRole("button")).not.toBeInTheDocument();
   });
 
+  it("marks an express Payout and gives it an Approve button", async () => {
+    server.use(
+      http.get("*/api/approvals", () => page([{ ...ITEMS[0], kind: "express_payout" }, ITEMS[1]])),
+    );
+    renderQueue();
+    const express = await screen.findByRole("listitem", { name: /Draft/ });
+    expect(within(express).getByText("express")).toBeVisible();
+    expect(
+      within(express).getByRole("button", { name: "Approve the Payout for Draft" }),
+    ).toBeEnabled();
+    const failed = screen.getByRole("listitem", { name: /Final/ });
+    expect(within(failed).queryByText("express")).not.toBeInTheDocument();
+  });
+
   it("says that nothing waits when the queue is empty", async () => {
     server.use(http.get("*/api/approvals", () => page([])));
     renderQueue();

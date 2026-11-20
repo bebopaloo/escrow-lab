@@ -1,8 +1,8 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen, within } from "@testing-library/react";
+import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { delay, http, HttpResponse } from "msw";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { App } from "./App.tsx";
 import { server } from "./test-server.ts";
 
@@ -27,6 +27,7 @@ const SUMMARY = {
   sellerName: CAROL.displayName,
   totalMinor: 100_000,
   currency: "GBP",
+  express: true,
   state: "draft",
   createdAt: "2026-11-14T10:00:00.000Z",
 };
@@ -85,14 +86,47 @@ describe("Deal list", () => {
     renderApp();
     const row = await screen.findByRole("link", { name: /Logo design/ });
     expect(row).toBeInTheDocument();
-    expect(screen.getByText(/£1,000\.00/)).toBeInTheDocument();
-    expect(screen.getByText(/draft/)).toBeInTheDocument();
+    const item = row.closest("li");
+    expect(item).toHaveTextContent(/£1,000\.00/);
+    expect(item).toHaveTextContent(/draft/);
   });
 
   it("shows the empty state", async () => {
     signedInAs(ALICE, []);
     renderApp();
     expect(await screen.findByText("You have no Deals yet.")).toBeInTheDocument();
+  });
+
+  it("announces the empty states in a status region", async () => {
+    signedInAs(ALICE, []);
+    renderApp();
+    expect(await screen.findByText("You have no Deals yet.")).toHaveAttribute("role", "status");
+  });
+
+  it("announces a filter with no match in a status region", async () => {
+    signedInAs(ALICE);
+    renderApp();
+    await screen.findByRole("link", { name: /Logo design/ });
+    server.use(
+      http.get("*/api/deals", () =>
+        HttpResponse.json({ deals: [], total: 0, limit: 100, offset: 0 }),
+      ),
+    );
+    await userEvent.type(screen.getByRole("searchbox", { name: "Search Deals" }), "zzz");
+    expect(await screen.findByText("No Deals match.")).toHaveAttribute("role", "status");
+  });
+
+  it("announces the number of Deals that a filter returns in a status region", async () => {
+    signedInAs(ALICE);
+    renderApp();
+    await screen.findByRole("link", { name: /Logo design/ });
+    server.use(
+      http.get("*/api/deals", () =>
+        HttpResponse.json({ deals: [SUMMARY, SUMMARY], total: 2, limit: 100, offset: 0 }),
+      ),
+    );
+    await userEvent.type(screen.getByRole("searchbox", { name: "Search Deals" }), "logo");
+    expect(await screen.findByText("2 Deals found.")).toHaveAttribute("role", "status");
   });
 
   it("announces loading in a status region", async () => {
@@ -112,6 +146,28 @@ describe("Deal list", () => {
     server.use(http.get("*/api/deals", () => new HttpResponse(null, { status: 500 })));
     renderApp();
     expect(await screen.findByRole("alert")).toHaveTextContent(/cannot be loaded/);
+  });
+
+  it("sends the search text and the state filter to the API", async () => {
+    signedInAs(ALICE);
+    const queries: string[] = [];
+    server.use(
+      http.get("*/api/deals", ({ request }) => {
+        queries.push(new URL(request.url).search);
+        return HttpResponse.json({ deals: [SUMMARY], total: 1, limit: 100, offset: 0 });
+      }),
+    );
+    renderApp();
+    await screen.findByRole("link", { name: /Logo design/ });
+    await userEvent.type(screen.getByRole("searchbox", { name: "Search Deals" }), "logo");
+    await userEvent.selectOptions(screen.getByRole("combobox", { name: "State" }), "cancelled");
+    await vi.waitFor(() => {
+      const last = new URLSearchParams(queries.at(-1));
+      expect(last.get("q")).toBe("logo");
+      expect(last.get("state")).toBe("cancelled");
+    });
+    expect(new URLSearchParams(queries[0]).has("q")).toBe(false);
+    expect(new URLSearchParams(queries[0]).has("state")).toBe(false);
   });
 
   it("offers Create Deal to a Buyer", async () => {
@@ -150,6 +206,24 @@ describe("Deal detail", () => {
     expect(within(table).getByText("Draft")).toBeInTheDocument();
     expect(within(table).getByText("£400.00")).toBeInTheDocument();
     expect(within(table).getByText("£600.00")).toBeInTheDocument();
+  });
+
+  it("shows whether the Deal is express, with no control to change it", async () => {
+    for (const [express, text] of [
+      [true, "Express: on."],
+      [false, "Express: off."],
+    ] as const) {
+      server.resetHandlers();
+      signedInAs(ALICE);
+      server.use(
+        http.get(`*/api/deals/${DEAL_ID}`, () => HttpResponse.json({ ...DETAIL, express })),
+      );
+      renderApp();
+      await userEvent.click(await screen.findByRole("link", { name: /Logo design/ }));
+      expect(await screen.findByText(text)).toBeInTheDocument();
+      expect(screen.queryByRole("checkbox")).not.toBeInTheDocument();
+      cleanup();
+    }
   });
 
   it("offers the audit trail as a CSV download", async () => {
@@ -221,11 +295,36 @@ describe("Create Deal", () => {
         sellerId: CAROL.id,
         title: "Logo design",
         totalMinor: 100_000,
+        express: true,
         milestones: [
           { title: "Draft", amountMinor: 40_000 },
           { title: "Final", amountMinor: 60_000 },
         ],
       },
+    });
+  });
+
+  it("sends express off when the Buyer clears the Express box", async () => {
+    signedInAs(ALICE);
+    let sent: unknown;
+    server.use(
+      http.post("*/api/deals", async ({ request }) => {
+        sent = await request.json();
+        return HttpResponse.json(DETAIL, { status: 201 });
+      }),
+    );
+    renderApp();
+    await openForm();
+    expect(screen.getByRole("checkbox", { name: /Express/ })).toBeChecked();
+    await userEvent.selectOptions(await screen.findByLabelText("Seller"), CAROL.id);
+    await userEvent.type(screen.getByLabelText("Deal title"), "Logo design");
+    await userEvent.type(screen.getByLabelText("Total (£)"), "400");
+    await userEvent.type(screen.getByLabelText("Milestone 1 title"), "Draft");
+    await userEvent.type(screen.getByLabelText("Milestone 1 amount (£)"), "400");
+    await userEvent.click(screen.getByRole("checkbox", { name: /Express/ }));
+    await userEvent.click(screen.getByRole("button", { name: "Create the Deal" }));
+    await waitFor(() => {
+      expect(sent).toMatchObject({ express: false });
     });
   });
 

@@ -67,6 +67,7 @@ export function DealDetail({ id, userId, role, csrfToken, onBack }: DealDetailPr
           <p>
             Total: {formatMoney(deal.data.totalMinor)}. State: {deal.data.state.replace("_", " ")}.
           </p>
+          <p>Express: {deal.data.express ? "on" : "off"}.</p>
           <p>
             <a href={`/api/deals/${encodeURIComponent(id)}/audit.csv`} download>
               Export audit trail

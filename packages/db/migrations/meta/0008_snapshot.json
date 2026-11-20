@@ -1,5 +1,5 @@
 {
-  "id": "95c58de8-c676-4f40-b44c-a4fa1aea1e76",
+  "id": "47ef110f-aff7-4f58-8900-8f29c251961c",
   "prevId": "c4e188f0-eade-4936-aac3-cc9c21df8744",
   "version": "7",
   "dialect": "postgresql",
@@ -261,25 +261,6 @@
           "primaryKey": false,
           "notNull": false
         },
-        "refund_idempotency_key": {
-          "name": "refund_idempotency_key",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "refund_attempts": {
-          "name": "refund_attempts",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "default": 0
-        },
-        "next_refund_try_at": {
-          "name": "next_refund_try_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": false
-        },
         "created_at": {
           "name": "created_at",
           "type": "timestamp with time zone",
@@ -317,6 +298,21 @@
           "isUnique": false,
           "concurrently": false,
           "method": "btree",
+          "with": {}
+        },
+        "deals_title_trgm_idx": {
+          "name": "deals_title_trgm_idx",
+          "columns": [
+            {
+              "expression": "\"title\" gin_trgm_ops",
+              "asc": true,
+              "isExpression": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "gin",
           "with": {}
         }
       },
@@ -441,22 +437,6 @@
           "concurrently": false,
           "method": "btree",
           "with": {}
-        },
-        "ledger_entries_one_refund_idx": {
-          "name": "ledger_entries_one_refund_idx",
-          "columns": [
-            {
-              "expression": "deal_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": true,
-          "where": "\"ledger_entries\".\"kind\" = 'refund'",
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
         }
       },
       "foreignKeys": {
@@ -480,7 +460,7 @@
       "checkConstraints": {
         "ledger_entries_kind_check": {
           "name": "ledger_entries_kind_check",
-          "value": "\"ledger_entries\".\"kind\" in ('deposit', 'payout', 'refund')"
+          "value": "\"ledger_entries\".\"kind\" in ('deposit', 'payout')"
         },
         "ledger_entries_amount_check": {
           "name": "ledger_entries_amount_check",

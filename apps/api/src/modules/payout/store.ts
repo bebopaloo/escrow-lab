@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { schema, type Database } from "@escrow-lab/db";
-import { and, eq } from "drizzle-orm";
+import { and, eq, isNotNull, isNull } from "drizzle-orm";
 import { recordAuditEvent } from "../audit/index.ts";
 import { completeDeal } from "../deals/index.ts";
 import { recordPayout } from "../ledger/index.ts";
@@ -13,19 +13,48 @@ export interface PendingPayout {
 
 /**
  * Writes the `pending` Payout of a Milestone with a new Idempotency key. Call it in the
- * transaction that locks the Milestone and writes the `approve_payout` audit event.
+ * transaction that locks the Milestone. An Approver's Payout has its approver and goes with the
+ * `approve_payout` audit event. An express Payout has no approver: `approveExpressPayout` sets it.
  */
 export async function createPendingPayout(
   db: Pick<Database, "insert">,
-  input: { milestoneId: string; approvedBy: string },
+  input: { milestoneId: string; approvedBy: string } | { milestoneId: string; express: true },
 ): Promise<PendingPayout> {
   const key = randomUUID();
   const [created] = await db
     .insert(schema.payouts)
-    .values({ milestoneId: input.milestoneId, approvedBy: input.approvedBy, idempotencyKey: key })
+    .values(
+      "express" in input
+        ? { milestoneId: input.milestoneId, express: true, idempotencyKey: key }
+        : { milestoneId: input.milestoneId, approvedBy: input.approvedBy, idempotencyKey: key },
+    )
     .returning({ id: schema.payouts.id });
   if (created === undefined) throw new Error("The Payout was not saved");
   return { id: created.id, key };
+}
+
+/**
+ * Sets the approver of an express Payout that has none. It changes the row only while the Payout
+ * is `pending` with no approver, so two Approvers cannot both claim it. Returns the Payout, or
+ * `undefined` when there is nothing to approve.
+ */
+export async function approveExpressPayout(
+  db: Pick<Database, "update">,
+  input: { milestoneId: string; approverId: string },
+): Promise<PendingPayout | undefined> {
+  const [row] = await db
+    .update(schema.payouts)
+    .set({ approvedBy: input.approverId })
+    .where(
+      and(
+        eq(schema.payouts.milestoneId, input.milestoneId),
+        eq(schema.payouts.express, true),
+        eq(schema.payouts.state, "pending"),
+        isNull(schema.payouts.approvedBy),
+      ),
+    )
+    .returning({ id: schema.payouts.id, key: schema.payouts.idempotencyKey });
+  return row;
 }
 
 /** Whether a Payout exists for the Milestone. */
@@ -59,9 +88,16 @@ export async function confirmPayout(
       })
       .from(schema.payouts)
       .innerJoin(schema.milestones, eq(schema.milestones.id, schema.payouts.milestoneId))
-      .where(and(eq(schema.payouts.id, input.payoutId), eq(schema.payouts.state, "pending")))
+      .where(
+        and(
+          eq(schema.payouts.id, input.payoutId),
+          eq(schema.payouts.state, "pending"),
+          // An express Payout with no approver never confirms ([CTRL-PAY-01]).
+          isNotNull(schema.payouts.approvedBy),
+        ),
+      )
       .for("update", { of: schema.payouts });
-    if (row === undefined) return false;
+    if (row === undefined || row.approvedBy === null) return false;
     const [deal] = await tx
       .select({ state: schema.deals.state })
       .from(schema.deals)

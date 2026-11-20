@@ -49,6 +49,17 @@ export const ApprovalItem = z.discriminatedUnion("kind", [
       amountMinor: z.number().int(),
     })
     .strict(),
+  /** An express Payout that waits for an Approver. Its `id` is the Milestone id, as for `milestone`. */
+  z
+    .object({
+      kind: z.literal("express_payout"),
+      id: z.uuid(),
+      ...QueueBase,
+      title: z.string(),
+      position: z.number().int().min(1),
+      amountMinor: z.number().int(),
+    })
+    .strict(),
   z
     .object({
       kind: z.literal("failed_payout"),

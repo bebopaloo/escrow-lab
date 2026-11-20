@@ -50,6 +50,7 @@ describe("Approve a Payout", () => {
       sellerId: CAROL,
       title: "Logo design",
       totalMinor: 100_000,
+      express: false,
       milestones: [
         { title: "Draft", amountMinor: 40_000 },
         { title: "Final", amountMinor: 60_000 },

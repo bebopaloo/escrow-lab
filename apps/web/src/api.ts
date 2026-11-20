@@ -4,6 +4,7 @@ import {
   RefundDealResponse,
   RetryPayoutResponse,
   DealListResponse,
+  type DealState,
   DealResponse,
   ErrorResponse,
   HealthResponse,
@@ -73,9 +74,19 @@ export class NotFoundError extends Error {}
 /** A refusal that the API explains in words that the person can read. */
 export class RefusedError extends Error {}
 
-export async function fetchDeals(signal?: AbortSignal): Promise<DealListResponse> {
+export interface DealFilter {
+  q: string;
+  state: DealState | "";
+}
+
+export async function fetchDeals(
+  filter: DealFilter,
+  signal?: AbortSignal,
+): Promise<DealListResponse> {
   const url = new URL("/api/deals", window.location.origin);
   url.searchParams.set("limit", "100");
+  if (filter.q !== "") url.searchParams.set("q", filter.q);
+  if (filter.state !== "") url.searchParams.set("state", filter.state);
   const response = await fetch(url, signal ? { signal } : {});
   return DealListResponse.parse(await readJson(response, 200, "Deal list"));
 }

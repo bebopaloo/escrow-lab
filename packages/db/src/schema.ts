@@ -2,6 +2,7 @@
 // generated migration with it.
 import { sql } from "drizzle-orm";
 import {
+  boolean,
   check,
   index,
   integer,
@@ -71,6 +72,8 @@ export const deals = pgTable(
     })
       .notNull()
       .default("draft"),
+    /** An express Deal pays a Milestone when the Buyer accepts its evidence. Fixed at creation. */
+    express: boolean("express").notNull().default(true),
     fundingIdempotencyKey: text("funding_idempotency_key"),
     fundingAttempts: integer("funding_attempts").notNull().default(0),
     nextFundingTryAt: timestamp("next_funding_try_at", { withTimezone: true }),
@@ -82,6 +85,7 @@ export const deals = pgTable(
   (table) => [
     index("deals_buyer_id_idx").on(table.buyerId),
     index("deals_seller_id_idx").on(table.sellerId),
+    index("deals_title_trgm_idx").using("gin", sql`${table.title} gin_trgm_ops`),
     check("deals_total_check", sql`${table.totalMinor} between 1 and 100000000`),
     check("deals_currency_check", sql`${table.currency} = 'GBP'`),
     check(
@@ -161,9 +165,10 @@ export const payouts = pgTable(
       .default("pending"),
     attempts: integer("attempts").notNull().default(0),
     nextTryAt: timestamp("next_try_at", { withTimezone: true }),
-    approvedBy: uuid("approved_by")
-      .notNull()
-      .references(() => users.id),
+    /** Null until an Approver approves an express Payout ([CTRL-PAY-01]). */
+    approvedBy: uuid("approved_by").references(() => users.id),
+    /** An express Payout waits at the head of the approval queue for an Approver. */
+    express: boolean("express").notNull().default(false),
     chainTxId: text("chain_tx_id"),
     sellerReference: text("seller_reference"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),

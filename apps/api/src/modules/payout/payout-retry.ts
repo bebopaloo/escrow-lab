@@ -1,5 +1,5 @@
 import { schema, type Database } from "@escrow-lab/db";
-import { and, asc, eq, inArray, isNull, lte, or } from "drizzle-orm";
+import { and, asc, eq, inArray, isNotNull, isNull, lte, or } from "drizzle-orm";
 import type { Chain } from "../../adapters/chain/index.ts";
 import { recordAuditEvent } from "../audit/index.ts";
 import { confirmPayout } from "./store.ts";
@@ -32,6 +32,8 @@ export function createPayoutRetry({ db, chain, now }: PayoutRetryOptions) {
     and(
       eq(schema.payouts.state, "pending"),
       eq(schema.deals.state, "funded"),
+      // An express Payout has no approver until an Approver approves it: the job never sends it.
+      isNotNull(schema.payouts.approvedBy),
       or(isNull(schema.payouts.nextTryAt), lte(schema.payouts.nextTryAt, at)),
     );
 
@@ -83,7 +85,7 @@ export function createPayoutRetry({ db, chain, now }: PayoutRetryOptions) {
           approvedBy: schema.payouts.approvedBy,
           milestoneId: schema.payouts.milestoneId,
         });
-      if (row === undefined || attempts < MAX_PAYOUT_TRIES) return;
+      if (row?.approvedBy == null || attempts < MAX_PAYOUT_TRIES) return;
       const [milestone] = await tx
         .select({ dealId: schema.milestones.dealId })
         .from(schema.milestones)

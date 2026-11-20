@@ -38,6 +38,7 @@ export const CreateDealRequest = z
     sellerId: z.uuid(),
     title: z.string().trim().min(1).max(100),
     totalMinor: Minor,
+    express: z.boolean().default(true),
     milestones: z
       .array(z.object({ title: z.string().trim().min(1).max(100), amountMinor: Minor }).strict())
       .min(1)
@@ -87,6 +88,7 @@ export const DealSummary = z
     sellerName: z.string(),
     totalMinor: z.number().int(),
     currency: z.literal("GBP"),
+    express: z.boolean(),
     state: DealState,
     createdAt: z.string(),
   })
@@ -98,13 +100,25 @@ export const DealResponse = DealSummary.extend({
 }).strict();
 export type DealResponse = z.infer<typeof DealResponse>;
 
-export const ListDealsQuery = z
+const PaginationQuery = z
   .object({
     limit: z.coerce.number().int().min(1).max(MAX_PAGE_SIZE).default(DEFAULT_PAGE_SIZE),
     offset: z.coerce.number().int().min(0).default(0),
   })
   .strict();
+
+export const MAX_SEARCH_LENGTH = 100;
+
+/** The Deal list query: the page, an optional title search `q` and an optional state filter. */
+export const ListDealsQuery = PaginationQuery.extend({
+  q: z.string().max(MAX_SEARCH_LENGTH).optional(),
+  state: DealState.optional(),
+}).strict();
 export type ListDealsQuery = z.infer<typeof ListDealsQuery>;
+
+/** The page query alone, for lists with no search. */
+export const PageQuery = PaginationQuery;
+export type PageQuery = z.infer<typeof PageQuery>;
 
 export const DealListResponse = z
   .object({
