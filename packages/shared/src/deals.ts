@@ -65,7 +65,11 @@ export type PayoutState = z.infer<typeof PayoutState>;
 
 /** The Payout of a Milestone. `paidAt` is set only when the Payout is `confirmed`. */
 export const PayoutStatus = z
-  .object({ state: PayoutState, paidAt: z.string().nullable() })
+  .object({
+    state: PayoutState,
+    paidAt: z.string().nullable(),
+    sellerReference: z.string().nullable(),
+  })
   .strict();
 export type PayoutStatus = z.infer<typeof PayoutStatus>;
 
@@ -159,3 +163,13 @@ export type NoteResponse = z.infer<typeof NoteResponse>;
 
 export const NotesResponse = z.object({ notes: z.array(NoteResponse) }).strict();
 export type NotesResponse = z.infer<typeof NotesResponse>;
+
+export const MAX_REFERENCE_LENGTH = 40;
+
+/** The Seller's reference for a Payout. An empty value clears it. */
+export const SetReferenceRequest = z
+  .object({ reference: z.string().trim().max(MAX_REFERENCE_LENGTH) })
+  .strict();
+export type SetReferenceRequest = z.infer<typeof SetReferenceRequest>;
+
+export const ReferenceParams = z.object({ id: z.uuid(), milestoneId: z.uuid() }).strict();

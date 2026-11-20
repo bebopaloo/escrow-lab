@@ -5,7 +5,7 @@ import type {
   DealSummary,
   PayoutHistoryItem,
 } from "@escrow-lab/shared";
-import { and, count, desc, eq, ne, or } from "drizzle-orm";
+import { and, count, desc, eq, inArray, ne, or } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { recordAuditEvent } from "../audit/index.ts";
 import { insertMilestones, listMilestones } from "../milestones/index.ts";
@@ -149,4 +149,36 @@ export async function listSellerPayouts(
     payouts: rows.map((row) => ({ ...row, createdAt: row.createdAt.toISOString() })),
     total: totals?.total ?? 0,
   };
+}
+
+/**
+ * Sets the Seller reference of the Payout of a Milestone, or clears it when `reference` is empty.
+ * Returns false when the Seller has no such Payout on that Deal.
+ */
+export async function setPayoutReference(
+  db: Database,
+  sellerId: string,
+  dealId: string,
+  milestoneId: string,
+  reference: string,
+): Promise<boolean> {
+  const owned = db
+    .select({ id: schema.milestones.id })
+    .from(schema.milestones)
+    .innerJoin(schema.deals, eq(schema.deals.id, schema.milestones.dealId))
+    .where(
+      and(
+        eq(schema.milestones.id, milestoneId),
+        eq(schema.deals.id, dealId),
+        eq(schema.deals.sellerId, sellerId),
+      ),
+    );
+  const updated = await db
+    .update(schema.payouts)
+    .set({ sellerReference: reference === "" ? null : reference })
+    .where(
+      and(eq(schema.payouts.milestoneId, milestoneId), inArray(schema.payouts.milestoneId, owned)),
+    )
+    .returning({ id: schema.payouts.id });
+  return updated.length > 0;
 }

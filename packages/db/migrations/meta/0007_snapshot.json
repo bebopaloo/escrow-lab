@@ -1,5 +1,5 @@
 {
-  "id": "ae1929e0-3a84-43c6-9f1b-c10bc67e655e",
+  "id": "c4e188f0-eade-4936-aac3-cc9c21df8744",
   "prevId": "20c9ebb0-8ec8-4151-aaef-caa6177ddfea",
   "version": "7",
   "dialect": "postgresql",
@@ -241,13 +241,6 @@
           "primaryKey": false,
           "notNull": true,
           "default": "'draft'"
-        },
-        "express": {
-          "name": "express",
-          "type": "boolean",
-          "primaryKey": false,
-          "notNull": true,
-          "default": true
         },
         "funding_idempotency_key": {
           "name": "funding_idempotency_key",
@@ -603,17 +596,16 @@
           "name": "approved_by",
           "type": "uuid",
           "primaryKey": false,
-          "notNull": false
-        },
-        "express": {
-          "name": "express",
-          "type": "boolean",
-          "primaryKey": false,
-          "notNull": true,
-          "default": false
+          "notNull": true
         },
         "chain_tx_id": {
           "name": "chain_tx_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "seller_reference": {
+          "name": "seller_reference",
           "type": "text",
           "primaryKey": false,
           "notNull": false
@@ -708,6 +700,10 @@
         "payouts_state_check": {
           "name": "payouts_state_check",
           "value": "\"payouts\".\"state\" in ('pending', 'confirmed', 'failed')"
+        },
+        "payouts_seller_reference_check": {
+          "name": "payouts_seller_reference_check",
+          "value": "\"payouts\".\"seller_reference\" is null or char_length(\"payouts\".\"seller_reference\") <= 40"
         }
       },
       "isRLSEnabled": false
