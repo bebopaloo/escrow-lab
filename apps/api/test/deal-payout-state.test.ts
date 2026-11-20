@@ -63,6 +63,7 @@ describe("the Payout state of each Milestone on the Deal", () => {
       expect(first?.payout).toEqual({
         state: "confirmed",
         paidAt: ledger?.createdAt.toISOString(),
+        sellerReference: null,
       });
     }
   });
@@ -72,7 +73,7 @@ describe("the Payout state of each Milestone on the Deal", () => {
     const ids = await approved(h);
     const [first] = await milestonesOf(h, ids.dealId, CAROL);
     expect(first?.state).toBe("accepted");
-    expect(first?.payout).toEqual({ state: "pending", paidAt: null });
+    expect(first?.payout).toEqual({ state: "pending", paidAt: null, sellerReference: null });
   });
 
   it("shows a failed Payout without a paid time", async () => {
@@ -83,6 +84,6 @@ describe("the Payout state of each Milestone on the Deal", () => {
       .set({ state: "failed" })
       .where(eq(schema.payouts.id, ids.payoutId));
     const [first] = await milestonesOf(h, ids.dealId, ALICE);
-    expect(first?.payout).toEqual({ state: "failed", paidAt: null });
+    expect(first?.payout).toEqual({ state: "failed", paidAt: null, sellerReference: null });
   });
 });

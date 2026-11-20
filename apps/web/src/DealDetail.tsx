@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { DealMilestoneResponse } from "@escrow-lab/shared";
 import { fetchDeal, fundDeal, NotFoundError, PaymentFailedError } from "./api.ts";
 import { DealNotes } from "./DealNotes.tsx";
+import { PayoutReference } from "./PayoutReference.tsx";
 import { MilestoneEvidence } from "./MilestoneEvidence.tsx";
 import { formatMoney } from "./money.ts";
 
@@ -110,7 +111,19 @@ export function DealDetail({ id, userId, role, csrfToken, onBack }: DealDetailPr
                   <td>{milestone.title}</td>
                   <td>{formatMoney(milestone.amountMinor)}</td>
                   <td>{milestone.state.replace("_", " ")}</td>
-                  <td>{payoutWords(milestone)}</td>
+                  <td>
+                    {payoutWords(milestone)}
+                    {milestone.payout !== null && (
+                      <PayoutReference
+                        dealId={id}
+                        milestoneId={milestone.id}
+                        title={milestone.title}
+                        reference={milestone.payout.sellerReference}
+                        editable={role === "seller" && deal.data.sellerId === userId}
+                        csrfToken={csrfToken}
+                      />
+                    )}
+                  </td>
                 </tr>
               ))}
             </tbody>
