@@ -11,7 +11,17 @@ export const SELLER_MUST_BE_SELLER = "The Seller must be a user with the Seller 
 
 const Minor = z.number().int().min(1).max(MAX_TOTAL_MINOR);
 
-export const DealState = z.enum(["draft", "funding", "funding_failed", "funded", "completed"]);
+export const DealState = z.enum([
+  "draft",
+  "funding",
+  "funding_failed",
+  "funded",
+  "completed",
+  "cancelled",
+  "refunding",
+  "refund_failed",
+  "refunded",
+]);
 export type DealState = z.infer<typeof DealState>;
 
 export const MilestoneState = z.enum([
@@ -50,6 +60,20 @@ export const MilestoneResponse = z
   .strict();
 export type MilestoneResponse = z.infer<typeof MilestoneResponse>;
 
+export const PayoutState = z.enum(["pending", "confirmed", "failed"]);
+export type PayoutState = z.infer<typeof PayoutState>;
+
+/** The Payout of a Milestone. `paidAt` is set only when the Payout is `confirmed`. */
+export const PayoutStatus = z
+  .object({ state: PayoutState, paidAt: z.string().nullable() })
+  .strict();
+export type PayoutStatus = z.infer<typeof PayoutStatus>;
+
+export const DealMilestoneResponse = MilestoneResponse.extend({
+  payout: PayoutStatus.nullable(),
+}).strict();
+export type DealMilestoneResponse = z.infer<typeof DealMilestoneResponse>;
+
 export const DealSummary = z
   .object({
     id: z.uuid(),
@@ -68,7 +92,7 @@ export const DealSummary = z
 export type DealSummary = z.infer<typeof DealSummary>;
 
 export const DealResponse = DealSummary.extend({
-  milestones: z.array(MilestoneResponse),
+  milestones: z.array(DealMilestoneResponse),
 }).strict();
 export type DealResponse = z.infer<typeof DealResponse>;
 
@@ -114,3 +138,24 @@ export type RejectEvidenceRequest = z.infer<typeof RejectEvidenceRequest>;
 export const AcceptEvidenceRequest = z.object({}).strict();
 
 export const WRONG_MILESTONE_STATE = "The Milestone is not in the right state for this action.";
+
+export const MAX_NOTE_LENGTH = 1000;
+
+export const AddNoteRequest = z
+  .object({ text: z.string().trim().min(1).max(MAX_NOTE_LENGTH) })
+  .strict();
+export type AddNoteRequest = z.infer<typeof AddNoteRequest>;
+
+export const NoteResponse = z
+  .object({
+    id: z.uuid(),
+    text: z.string(),
+    authorId: z.uuid(),
+    authorName: z.string(),
+    createdAt: z.string(),
+  })
+  .strict();
+export type NoteResponse = z.infer<typeof NoteResponse>;
+
+export const NotesResponse = z.object({ notes: z.array(NoteResponse) }).strict();
+export type NotesResponse = z.infer<typeof NotesResponse>;

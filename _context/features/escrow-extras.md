@@ -49,12 +49,14 @@ The escrow core covers one happy journey and its failures. People who use escrow
 ### Express Deals
 - **Given** a new Deal, which is express by default
 - **When** the Buyer accepts the evidence of a Milestone
-- **Then** the app pays the Milestone at once: the Payout goes to the chain in the same request, and on confirmation the Milestone is "paid" and the next Milestone opens
-- [ ] The Buyer can turn express off when they create the Deal. A Deal that is not express keeps the approval queue. The Deal page shows the setting, and nobody can change it after creation.
+- **Then** the app creates the Payout of the Milestone at once and puts it at the head of the approval queue, marked express. An Approver approves it as any other Payout. No party to the Deal approves it
+- [ ] The Buyer can turn express off when they create the Deal. A Deal that is not express keeps the normal place in the approval queue. The Deal page shows the setting, and nobody can change it after creation.
 - [ ] Deals that exist before this change are not express.
-- [ ] When the first transfer does not confirm, the accept returns the Milestone as "accepted", the Payout stays "pending", and the retry job carries on, as for any Payout.
-- [ ] The Payout records the Buyer as its approver. The accept writes the `accept` and `express_payout` audit events.
-- [ ] Test set-ups that create a Deal for the approval path send `express: false`. The e2e journey keeps the approval path, and a new e2e spec covers an express Deal.
+- [ ] The Payout of an express Deal has no approver until an Approver approves it. The Buyer, the Seller and the accept request never approve it, as [CTRL-PAY-01] requires. A Buyer or a Seller who tries to approve it gets 403.
+- [ ] The approval queue lists the express Payouts before all other items and shows an "express" mark on each. Express Payouts keep the order of their creation.
+- [ ] When an Approver approves an express Payout, the Payout follows the normal approval path: the transfer goes to the chain, and on confirmation the Milestone is "paid" and the next Milestone opens. A transfer that does not confirm leaves the Payout "pending" for the retry job, as for any Payout.
+- [ ] The accept returns the Milestone as "accepted" and writes the `accept` and `express_payout` audit events. The `express_payout` event records that the Payout was created and queued, not paid.
+- [ ] Test set-ups that create a Deal for the approval path send `express: false`. The e2e journey keeps the normal approval path, and a new e2e spec covers an express Deal: the Buyer accepts, the Payout shows first in the queue marked express, an Approver approves it, and the Milestone is "paid".
 
 ### Refund a funded Deal
 - **Given** a funded Deal with no Payout
@@ -104,15 +106,16 @@ The escrow core covers one happy journey and its failures. People who use escrow
 - [ ] `apps/api/test/harness.ts` exports `signIn(app, userId)` and `cookieOf`. Every API test file except `session.test.ts` uses them, and no other copy is left.
 - [ ] Each test checks the same things as before. This change does not lower the test count.
 
-### Remove the flaky retry tests
-- [ ] The tests "skips a Deal that another try holds with a row lock" in `apps/api/test/funding-retry.test.ts` and "skips a Payout that another try holds with a row lock" in `apps/api/test/payout-retry.test.ts` are removed. The end-to-end suite covers retries.
+### Keep the row-lock tests and fix their lock release
+- [ ] The tests "skips a Deal that another try holds with a row lock" in `apps/api/test/funding-retry.test.ts` and "skips a Payout that another try holds with a row lock" in `apps/api/test/payout-retry.test.ts` stay. The project rule forbids the deletion of a test.
+- [ ] Each of the two tests releases its row lock in a `finally` block. The lock is released when the test fails or when the lock holder ends early.
 - [ ] `pnpm test` passes in ten CI runs in a row.
 
 ### Demo mode
 - **Given** `DEMO_AUTO_APPROVE` is on
 - **When** a Buyer accepts the evidence of a Milestone
 - **Then** on the next demo loop run the app pays the Milestone, with Erin Approver (`00000000-0000-4000-8000-000000000005`) as its approver
-- [ ] `DEMO_AUTO_APPROVE` is on by default when `NODE_ENV` is not `production`. Config refuses `DEMO_AUTO_APPROVE=true` when `NODE_ENV` is `production`, and a test proves it.
+- [ ] `DEMO_AUTO_APPROVE` is on by default when `NODE_ENV` is not `production`. Config refuses `DEMO_AUTO_APPROVE=true` when `NODE_ENV` is `production`, and a test proves it. The demo loop acts as the seeded Approver outside production only: `[CTRL-PAY-01]` names the case, and `[CTRL-PAY-03]` keeps it out of production.
 - [ ] The Playwright config sets `DEMO_AUTO_APPROVE=false` for the API that the e2e tests start.
 - [ ] When the seeded Approver is missing, the loop logs a warning and pays nothing.
 - [ ] Each demo Payout writes the `approve_payout` audit event for the seeded Approver.
@@ -169,7 +172,7 @@ Every state-changing route keeps the existing CSRF check, rate limit and strict 
 
 ### Express Payouts
 
-The accept action in `milestones` checks the Deal's `express` column after it marks the Milestone `accepted`. For an express Deal it creates the Payout with `createPendingPayout` from `payout`, with the Buyer as its approver, sends the transfer through the chain with the Payout's Idempotency key, and on confirmation calls `confirmPayout` from `payout`. A transfer that does not confirm leaves the Payout `pending` for the retry job.
+The accept action in `milestones` checks the Deal's `express` column after it marks the Milestone `accepted`. For an express Deal it creates the Payout with `createPendingPayout` from `payout`, with no approver, marked express, and writes the `express_payout` audit event. It does not send a transfer. The `approval` module lists the pending express Payouts before all other items. An Approver approves an express Payout with the same approve action as any other Payout, and that action records the Approver, sends the transfer and calls `confirmPayout` from `payout`. No code in `milestones` records a party to the Deal as an approver ([CTRL-PAY-01]).
 
 ### Refunds
 
@@ -181,7 +184,7 @@ The chain port gains `refund(buyer, amount, key)`, and the fake chain implements
 
 The retry job in `payout` also retries each Deal in `refunding` whose next try time has passed, with the same key, with the same backoff, and after 5 tries sets `refund_failed`.
 
-The approve action, the express accept, the demo loop, `confirmPayout` and the Payout retry each check that the Deal is `funded` before they write or send a Payout.
+The approve action, the express accept (which creates the Payout), the demo loop, `confirmPayout` and the Payout retry each check that the Deal is `funded` before they write or send a Payout.
 
 ### Demo mode
 

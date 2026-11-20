@@ -248,13 +248,66 @@ describe("retry a Deal's funding", () => {
       locked();
       await held;
     });
-    await lockedRow;
-    await t.job.runOnce({ dealIds: [dealId] });
-    expect(t.chargeKeys).toHaveLength(1);
-    release();
-    await holder;
+    try {
+      await Promise.race([lockedRow, holder]);
+      await t.job.runOnce({ dealIds: [dealId] });
+      expect(t.chargeKeys).toHaveLength(1);
+    } finally {
+      release();
+      await holder;
+    }
     await t.job.runOnce({ dealIds: [dealId] });
     expect(t.chargeKeys).toHaveLength(2);
+    expect((await dealRow(dealId))?.state).toBe("funded");
+  });
+
+  it("[CTRL-PAY-02] leases a Deal during a try: a second job run inside the lease skips it", async () => {
+    const t = await begin([{ kind: "lose_reply" }]);
+    const dealId = await t.fundNewDeal();
+    t.advance(2_000);
+    // The first job stops inside the charge, so its lease is still open.
+    let release: () => void = () => undefined;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    let entered: () => void = () => undefined;
+    const inCharge = new Promise<void>((resolve) => {
+      entered = resolve;
+    });
+    let charges = 0;
+    const gatedRail: PaymentRail = {
+      charge: async (buyer, amount, key) => {
+        charges += 1;
+        entered();
+        await gate;
+        return t.rail.charge(buyer, amount, key);
+      },
+    };
+    const clock = () => new Date(t.now());
+    const first = createFundingRetryJob({
+      db: database.db,
+      chain: t.chain,
+      paymentRail: gatedRail,
+      now: clock,
+    });
+    const second = createFundingRetryJob({
+      db: database.db,
+      chain: t.chain,
+      paymentRail: gatedRail,
+      now: clock,
+    });
+    const firstRun = first.runOnce({ dealIds: [dealId] });
+    await inCharge;
+    const leasedUntil = (await dealRow(dealId))?.nextFundingTryAt?.getTime() ?? 0;
+    expect(leasedUntil).toBeGreaterThan(t.now());
+
+    t.advance(10_000); // still inside the 30 second lease
+    await second.runOnce({ dealIds: [dealId] });
+    expect(charges).toBe(1);
+
+    release();
+    await firstRun;
+    expect(charges).toBe(1);
     expect((await dealRow(dealId))?.state).toBe("funded");
   });
 

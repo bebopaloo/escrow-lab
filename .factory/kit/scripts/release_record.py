@@ -14,13 +14,15 @@ to the forge release.
 Commands:
   build --name vX.Y.Z --release-pr <n> --contents <json> --prs <json> --tier <json>
         [--approval <json>] [--matrix <json>] [--waivers <toml>] [--baseline <sha>]
-        [--sbom-digest <digest>] [--modules <json>] [--today YYYY-MM-DD] [--format md|json]
+        [--sbom-digest <digest>] [--modules <json>] [--deferred <json>] [--today YYYY-MM-DD] [--format md|json]
       --contents is `release_plan.py contents`, --tier is `release_plan.py tier`,
       --approval is `release_approval.py check`, --matrix is
       `controls.py matrix --format json`, --modules is `factory_config.py
       validate`. --prs is a list of {number, title, issue, issue_type, tier,
       review_record}: review_record is the body of the factory's last review on
       that pull request. --baseline names the baseline commit of a first Release.
+      --deferred is `release_plan.py deferred`: its cleared findings go in the
+      record, and a carried finding is a gap.
       Exit 0 when the record has no gaps, 1 when it has gaps, 2 on an error.
 """
 
@@ -55,7 +57,7 @@ def _approval(approval: dict | None) -> dict | None:
     }
 
 
-def build(name, release_pr, contents, prs, tier, approval, matrix, waivers, baseline, sbom_digest, modules, today) -> dict:
+def build(name, release_pr, contents, prs, tier, approval, matrix, waivers, baseline, sbom_digest, modules, today, deferred=None) -> dict:
     gaps = []
     by_number = {pr["number"]: pr for pr in prs}
     rows = []
@@ -84,6 +86,9 @@ def build(name, release_pr, contents, prs, tier, approval, matrix, waivers, base
                 gaps.append(f"Control {row['id']} is {row['status']}")
         controls = {"summary": summary, "controls": rows_controls}
 
+    deferred = deferred or {}
+    gaps += [f"Deferred finding: {line}" for line in deferred.get("lines", [])]
+
     current = [
         {"id": w.get("id"), "covers": w.get("covers"), "expires": w["expires"].isoformat(), "approved_by": w.get("approved_by")}
         for w in waiver_register.current(waivers, today)
@@ -104,6 +109,7 @@ def build(name, release_pr, contents, prs, tier, approval, matrix, waivers, base
         "release_approval": recorded_approval,
         "controls": controls,
         "waivers": current,
+        "deferred_cleared": deferred.get("cleared", []),
         "sbom_digest": sbom_digest,
         "control_modules": modules,
         "gaps": gaps,
@@ -157,6 +163,12 @@ def to_markdown(record: dict) -> str:
     lines += ["", "## Waivers", ""]
     lines += [f"- {w['id']}: {_cell(json.dumps(w['covers']))}, until {w['expires']}, approved by {w['approved_by']}" for w in record["waivers"]] or ["None current."]
 
+    lines += ["", "## Cleared Deferred findings", ""]
+    lines += [
+        f"- #{c['issue']}: cleared by {c['by']}" + (f" ({c['waiver']})" if c.get("waiver") else "") + f": {_cell(c['reason'])}"
+        for c in record["deferred_cleared"]
+    ] or ["None."]
+
     lines += ["", "## Gaps", ""]
     lines += [f"- {gap}" for gap in record["gaps"]] or ["None."]
     return "\n".join(lines) + "\n"
@@ -183,7 +195,7 @@ def main(argv: list[str] | None = None, stdout: TextIO = sys.stdout, stderr: Tex
     for option in ("--name", "--contents", "--prs", "--tier"):
         b.add_argument(option, required=True)
     b.add_argument("--release-pr", type=int, required=True)
-    for option in ("--approval", "--matrix", "--waivers", "--baseline", "--sbom-digest", "--modules", "--today"):
+    for option in ("--approval", "--matrix", "--waivers", "--baseline", "--sbom-digest", "--modules", "--today", "--deferred"):
         b.add_argument(option)
     b.add_argument("--format", choices=("md", "json"), default="md")
     try:
@@ -206,6 +218,7 @@ def main(argv: list[str] | None = None, stdout: TextIO = sys.stdout, stderr: Tex
             sbom_digest=args.sbom_digest,
             modules=modules.get("modules") if isinstance(modules, dict) else None,
             today=today,
+            deferred=_json(args.deferred, "deferred"),
         )
     except (RecordError, waiver_register.WaiverError, KeyError, TypeError, ValueError) as error:
         stderr.write(json.dumps({"error": str(error)}) + "\n")

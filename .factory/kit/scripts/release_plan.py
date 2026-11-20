@@ -24,6 +24,16 @@ Commands:
       Group the issues of `contents` by Issue type, and leave out the issues that
       another Release shipped. `issues` is a list of tracker Issues; `releases`
       is the tracker `release list`. `add` is the issues to add to the Release.
+  security --contents-file <json> --prs-file <json> --dependencies-file <json>
+      The `## Security` section of the release PR body, as Markdown on stdout (the
+      only command that prints text, not JSON). `contents` is the output of
+      `contents`; `prs` is a list of the `pr view` output of each PR in it (the
+      body is read from it); `dependencies` is the output of `dependencies.py
+      added --base origin/production` on the release head. Controls, Threats and
+      Waivers are the IDs in the Security sections of those PRs. Each new
+      dependency is named with the PRs whose body names it. Residual risk lists
+      the direct commits. Every field of pr_sections.FIELDS is set, and Tests is
+      never `none`, so the section passes `pr_sections.py check` at `authority`.
   tier [--repo <path>] --base <ref> --head <ref> [--label-tier <tier>]...
       The Risk tier of the whole Release: the highest tier of its changed paths
       and of its PRs' `risk:*` labels. With risk_tiers off it prints
@@ -37,11 +47,27 @@ Commands:
       partial run does not count. Elsewhere it prints
       {"skipped": "not a Marketplace repo"}.
 
-Prints one JSON document on stdout. On an error: exit code 1 and
+  deferred --contents-file <json> --issues-file <json> --events-file <json> --operator <login>
+           [--waivers-file <toml>] [--today YYYY-MM-DD]
+      The Deferred finding check (Spec 106). `issues` is `issue list --state all
+      --label deferred`. `events` maps the number of each CANCELLED Deferred
+      finding issue to {"events": issue label-events, "comments": issue comments}.
+      A finding is carried when a PR of its `Source PRs:` line is in `contents.prs`
+      and its issue number is not in `contents.issues`. It is cleared when its
+      issue is CANCELLED, the last `state:cancelled` event is the Operator's, and
+      the Operator's last comment at or after the `time` of that event gives the
+      reason. A comment or an event without a valid `time` does not count. Pass `--waivers-file` only with
+      `waivers` on (the register from the main branch): the reason must then name
+      a current Waiver. It fails closed: 100 issues (the adapter limit) or a body
+      without a `Source PRs:` line fails. Prints {failed, lines, carried, cleared};
+      exit code 1 when `failed`.
+
+Prints one JSON document on stdout, except `security`. On an error: exit code 1 and
 {"error": ...} on stderr.
 """
 
 import argparse
+import datetime
 import json
 import re
 import subprocess
@@ -49,7 +75,10 @@ import sys
 from pathlib import Path
 from typing import TextIO
 
+import dependencies
+import pr_sections
 import risk_tier
+import waivers as waiver_register
 from factory_config import ConfigError, skip_unless
 
 MERGE_SUBJECT = re.compile(r"^Merge pull request #(?P<number>\d+) from [^/\s]+/(?P<branch>\S+)$")
@@ -200,6 +229,129 @@ def summary(plan: dict, issues: list[dict], releases: list[dict], name: str) -> 
     }
 
 
+# deferred: a Release must not carry the source PR of a Deferred finding without its fix (Spec 106)
+
+ISSUE_CAP = 100
+SOURCE_PRS = re.compile(r"^Source PRs:[ \t]*(?P<list>.*)$", re.MULTILINE)
+WAIVER_REF = re.compile(r"\bWAIVER-\d+\b")
+
+
+def _time(value) -> datetime.datetime | None:
+    """An ISO 8601 time as an aware datetime (UTC when it has no zone), or None when it is not one."""
+    try:
+        moment = datetime.datetime.fromisoformat(value)
+    except (TypeError, ValueError):
+        return None
+    return moment if moment.tzinfo else moment.replace(tzinfo=datetime.timezone.utc)
+
+
+def _written_since(comment: dict, moment: datetime.datetime) -> bool:
+    written = _time(comment.get("time"))
+    return written is not None and written >= moment
+
+
+def _cleared(number: int, evidence: dict, operator: str, entries: list[dict] | None, today: datetime.date) -> dict | None:
+    added = [e for e in evidence.get("events", []) if e["label"] == "state:cancelled" and e["action"] == "added"]
+    if not added or added[-1]["author"] != operator:
+        return None
+    cancelled_at = _time(added[-1].get("time"))
+    if cancelled_at is None:
+        return None
+    # Only a reason that the Operator wrote at or after the last cancel counts, so an old reason cannot clear a new cancel.
+    comments = [
+        c for c in evidence.get("comments", [])
+        if c["author"] == operator and c["body"].strip() and _written_since(c, cancelled_at)
+    ]
+    if not comments:
+        return None
+    reason = comments[-1]["body"].strip()
+    waiver = None
+    if entries is not None:
+        current = {w.get("id") for w in waiver_register.current(entries, today)}
+        named = [w for w in WAIVER_REF.findall(reason) if w in current]
+        if not named:
+            return None
+        waiver = named[0]
+    return {"issue": number, "by": operator, "reason": reason, "waiver": waiver}
+
+
+def deferred(plan: dict, issues: list[dict], events: dict, operator: str, waivers: list[dict] | None, today: datetime.date) -> dict:
+    """Check the Deferred findings against `contents`. `waivers` is None with the waivers module off."""
+    if len(issues) >= ISSUE_CAP:
+        return {"failed": True, "lines": ["too many Deferred finding issues to check"], "carried": [], "cleared": []}
+    in_release = {pr["number"] for pr in plan["prs"]}
+    shipped = set(plan["issues"])
+    carried, cleared, lines = [], [], []
+    for issue in sorted((i for i in issues if "deferred" in i["labels"]), key=lambda i: i["number"]):
+        number = issue["number"]
+        line = SOURCE_PRS.search(issue.get("body") or "")
+        sources = [int(n) for n in re.findall(r"#(\d+)", line["list"])] if line else []
+        if not sources:
+            carried.append({"issue": number, "title": issue["title"], "source_prs": []})
+            lines.append(f"#{number} {issue['title']}: the body has no `Source PRs:` line with a PR, so the check cannot clear it")
+            continue
+        if number in shipped or not in_release.intersection(sources):
+            continue
+        if issue["issue_state"] == "CANCELLED":
+            clearance = _cleared(number, events.get(str(number), {}), operator, waivers, today)
+            if clearance:
+                cleared.append(clearance)
+                continue
+        carried.append({"issue": number, "title": issue["title"], "source_prs": sources})
+        carrying = ", ".join(f"#{n}" for n in sources if n in in_release)
+        lines.append(f"#{number} {issue['title']}: the Release carries PR {carrying} without the fix issue #{number}")
+    return {"failed": bool(carried), "lines": lines, "carried": carried, "cleared": cleared}
+
+
+# security: the Security section of the release PR body (ADR 0014)
+
+DEPENDENCY_FIELD = dependencies.FIELD
+
+
+def _security_fields(body: str) -> dict[str, str]:
+    match = pr_sections.SECTION.search(body)
+    return {name.strip(): value.strip() for name, value in pr_sections.FIELD_LINE.findall(match.group(1))} if match else {}
+
+
+def _ids(field: str, fields: list[dict[str, str]]) -> str:
+    found = sorted({i for values in fields for i in pr_sections.ID_PATTERNS[field].findall(values.get(field, ""))})
+    return ", ".join(found) or "none"
+
+
+def security(plan: dict, prs: list[dict], added: list[dict]) -> str:
+    """The `## Security` section for the release PR body. See the `security` command."""
+    bodies = {pr["number"]: pr.get("body") or "" for pr in prs}
+    numbers = sorted({pr["number"] for pr in plan["prs"]})
+    missing = [n for n in numbers if n not in bodies]
+    if missing:
+        raise PlanError("the prs file has no body for " + ", ".join(f"#{n}" for n in missing))
+    fields = {n: _security_fields(bodies[n]) for n in numbers}
+    named = []
+    for name in sorted({dep["name"] for dep in added}, key=str.lower):
+        owners = [n for n in numbers if dependencies.is_named(name, fields[n].get(DEPENDENCY_FIELD, ""))]
+        named.append(f"{name} ({', '.join(f'PR #{n}' for n in owners) or 'no pull request names it'})")
+    direct = plan["direct_commits"]
+    residual = (
+        f"{len(direct)} direct commit{'s have' if len(direct) != 1 else ' has'} no pull request and no Machine gate: "
+        + "; ".join(f"{c['commit'][:12]} {' '.join(c['subject'].split())}" for c in direct)
+        if direct else "none"
+    )
+    gates = (
+        f"Each of the {len(numbers)} pull request{'s' if len(numbers) != 1 else ''} in the Release passed its Machine gate; "
+        if numbers else "The Release has no pull request; "
+    )
+    tests = gates + "CI runs on the release head; review-release reviews the whole Release"
+    values = {
+        "Controls": _ids("Controls", list(fields.values())),
+        "Threats": _ids("Threats", list(fields.values())),
+        DEPENDENCY_FIELD: "; ".join(named) or "none",
+        "Tests": tests,
+        "Residual risk": residual,
+        "Waivers": _ids("Waivers", list(fields.values())),
+    }
+    return "## Security\n" + "".join(f"- {field}: {values[field]}\n" for field in pr_sections.FIELDS)
+
+
 # eval reports (ADR 0011): a Marketplace Release ships only plugin versions with a full layer 3 report
 
 MARKETPLACE_MANIFEST = ".claude-plugin/marketplace.json"
@@ -305,6 +457,15 @@ def build_parser() -> argparse.ArgumentParser:
     rollback_cmd = commands.add_parser("rollback-target")
     rollback_cmd.add_argument("--repo", default=".")
     rollback_cmd.add_argument("--production", required=True)
+    security_cmd = commands.add_parser("security")
+    security_cmd.add_argument("--contents-file", required=True)
+    security_cmd.add_argument("--prs-file", required=True)
+    security_cmd.add_argument("--dependencies-file", required=True)
+    deferred_cmd = commands.add_parser("deferred")
+    for option in ("--contents-file", "--issues-file", "--events-file", "--operator"):
+        deferred_cmd.add_argument(option, required=True)
+    deferred_cmd.add_argument("--waivers-file")
+    deferred_cmd.add_argument("--today")
     summary_cmd = commands.add_parser("summary")
     summary_cmd.add_argument("--name", required=True)
     summary_cmd.add_argument("--contents-file", required=True)
@@ -323,13 +484,23 @@ def main(argv: list[str] | None = None, stdout: TextIO = sys.stdout, stderr: Tex
         elif args.command == "summary":
             plan = _read_json(args.contents_file)
             result = summary(plan, _read_json(args.issues_file), _read_json(args.releases_file), args.name)
+        elif args.command == "deferred":
+            today = datetime.date.fromisoformat(args.today) if args.today else datetime.datetime.now(datetime.UTC).date()
+            entries = waiver_register.load_file(Path(args.waivers_file)) if args.waivers_file else None
+            result = deferred(_read_json(args.contents_file), _read_json(args.issues_file), _read_json(args.events_file),
+                              args.operator, entries, today)
+            stdout.write(json.dumps(result, indent=2) + "\n")
+            return 1 if result["failed"] else 0
+        elif args.command == "security":
+            stdout.write(security(_read_json(args.contents_file), _read_json(args.prs_file), _read_json(args.dependencies_file)))
+            return 0
         elif args.command == "rollback-target":
             result = rollback_target(Path(args.repo), args.production)
         elif args.command == "eval-reports":
             result = eval_reports(Path(args.repo), args.base, args.head)
         else:
             result = tier(Path(args.repo), args.base, args.head, args.label_tier)
-    except (PlanError, ConfigError, risk_tier.TierError) as error:
+    except (PlanError, ConfigError, risk_tier.TierError, waiver_register.WaiverError, ValueError, KeyError) as error:
         stderr.write(json.dumps({"error": str(error)}) + "\n")
         return 1
     stdout.write(json.dumps(result, indent=2) + "\n")

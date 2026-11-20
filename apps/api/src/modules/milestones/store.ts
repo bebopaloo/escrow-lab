@@ -1,9 +1,8 @@
 import { schema, type Database } from "@escrow-lab/db";
-import type { MilestoneResponse } from "@escrow-lab/shared";
+import type { DealMilestoneResponse, MilestoneResponse } from "@escrow-lab/shared";
 import { and, asc, eq } from "drizzle-orm";
-import type { Chain } from "../../adapters/chain/index.ts";
 import { recordAuditEvent } from "../audit/index.ts";
-import { confirmPayout, createPendingPayout } from "../payout/index.ts";
+import { createPendingPayout } from "../payout/index.ts";
 
 export interface NewMilestone {
   title: string;
@@ -40,8 +39,12 @@ export async function insertMilestones(
     });
 }
 
-export async function listMilestones(db: Database, dealId: string): Promise<MilestoneResponse[]> {
-  return db
+/** The Milestones of a Deal with the state of each Payout. A confirmed Payout is paid at its ledger entry time. */
+export async function listMilestones(
+  db: Database,
+  dealId: string,
+): Promise<DealMilestoneResponse[]> {
+  const rows = await db
     .select({
       id: schema.milestones.id,
       position: schema.milestones.position,
@@ -50,10 +53,26 @@ export async function listMilestones(db: Database, dealId: string): Promise<Mile
       state: schema.milestones.state,
       evidenceText: schema.milestones.evidenceText,
       rejectionReason: schema.milestones.rejectionReason,
+      payoutState: schema.payouts.state,
+      paidAt: schema.ledgerEntries.createdAt,
     })
     .from(schema.milestones)
+    .leftJoin(schema.payouts, eq(schema.payouts.milestoneId, schema.milestones.id))
+    .leftJoin(
+      schema.ledgerEntries,
+      and(
+        eq(schema.ledgerEntries.dealId, schema.milestones.dealId),
+        eq(schema.ledgerEntries.kind, "payout"),
+        eq(schema.ledgerEntries.chainTxId, schema.payouts.chainTxId),
+      ),
+    )
     .where(eq(schema.milestones.dealId, dealId))
     .orderBy(asc(schema.milestones.position));
+  return rows.map(({ payoutState, paidAt, ...milestone }) => ({
+    ...milestone,
+    payout:
+      payoutState === null ? null : { state: payoutState, paidAt: paidAt?.toISOString() ?? null },
+  }));
 }
 
 /** Opens the first Milestone of a funded Deal: `pending` becomes `awaiting_evidence`. */
@@ -85,36 +104,26 @@ export type MilestoneAction =
 export type MilestoneOutcome =
   { kind: "done"; milestone: MilestoneResponse } | { kind: "not_found" } | { kind: "wrong_state" };
 
-interface ExpressClaim {
-  payout: { id: string; key: string };
-  sellerId: string;
-  amountMinor: number;
-}
-
 /**
  * Applies one evidence action. The Milestone is found through a Deal that the user owns in the
  * right role, and its row is locked. The state change and the audit event are one transaction.
  *
- * An accept on a funded express Deal also writes the `pending` Payout, with the Buyer as its
- * approver, in that transaction. The first transfer try then runs outside any transaction. A
- * confirmed transfer finishes the Payout; any other result leaves it `pending` for the retry job.
+ * An accept on a funded express Deal also queues the Payout in that transaction: it is `pending`,
+ * marked express and has no approver, and no transfer is sent. Only an Approver approves it, in
+ * the approval module ([CTRL-PAY-01]). This code never records a party to the Deal as approver.
  */
 export async function applyMilestoneAction(
   db: Database,
-  chain: Chain,
   milestoneId: string,
   action: MilestoneAction,
 ): Promise<MilestoneOutcome> {
-  const claim: { express?: ExpressClaim } = {};
-  const outcome = await db.transaction(async (tx): Promise<MilestoneOutcome> => {
+  return db.transaction(async (tx) => {
     const [found] = await tx
       .select({
         dealId: schema.milestones.dealId,
         state: schema.milestones.state,
-        amountMinor: schema.milestones.amountMinor,
         dealState: schema.deals.state,
         express: schema.deals.express,
-        sellerId: schema.deals.sellerId,
       })
       .from(schema.milestones)
       .innerJoin(schema.deals, eq(schema.deals.id, schema.milestones.dealId))
@@ -149,27 +158,15 @@ export async function applyMilestoneAction(
       dealId: found.dealId,
     });
     if (action.kind === "accept" && found.express && found.dealState === "funded") {
-      const payout = await createPendingPayout(tx, { milestoneId, approvedBy: action.buyerId });
+      await createPendingPayout(tx, { milestoneId, express: true });
       await recordAuditEvent(tx, {
         userId: action.buyerId,
         action: "express_payout",
         dealId: found.dealId,
       });
-      claim.express = { payout, sellerId: found.sellerId, amountMinor: found.amountMinor };
     }
     return { kind: "done", milestone };
   });
-  if (outcome.kind !== "done" || claim.express === undefined) return outcome;
-
-  const { payout, sellerId, amountMinor } = claim.express;
-  const transfer = await chain.transfer(sellerId, amountMinor, payout.key);
-  if (!transfer.ok) return outcome;
-  await confirmPayout(db, { payoutId: payout.id, chainTxId: transfer.txId });
-  const [paid] = await db
-    .select(milestoneColumns)
-    .from(schema.milestones)
-    .where(eq(schema.milestones.id, milestoneId));
-  return paid === undefined ? outcome : { kind: "done", milestone: paid };
 }
 
 /**

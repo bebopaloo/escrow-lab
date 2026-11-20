@@ -40,8 +40,22 @@
     {
       "idx": 5,
       "version": "7",
-      "when": 1794954337819,
-      "tag": "0005_natural_living_tribunal",
+      "when": 1794957418025,
+      "tag": "0005_wise_skullbuster",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1795044767764,
+      "tag": "0006_perpetual_outlaw_kid",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1795161849632,
+      "tag": "0007_faulty_adam_warlock",
       "breakpoints": true
     }
   ]

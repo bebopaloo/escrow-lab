@@ -1,6 +1,11 @@
 import { schema, type Database } from "@escrow-lab/db";
-import type { CreateDealRequest, DealResponse, DealSummary } from "@escrow-lab/shared";
-import { and, count, desc, eq, or } from "drizzle-orm";
+import type {
+  CreateDealRequest,
+  DealResponse,
+  DealSummary,
+  PayoutHistoryItem,
+} from "@escrow-lab/shared";
+import { and, count, desc, eq, ne, or } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { recordAuditEvent } from "../audit/index.ts";
 import { insertMilestones, listMilestones } from "../milestones/index.ts";
@@ -32,6 +37,9 @@ function toSummary(row: SummaryRow): DealSummary {
 
 const ownedBy = (userId: string) =>
   or(eq(schema.deals.buyerId, userId), eq(schema.deals.sellerId, userId));
+
+/** The default Deal list hides cancelled Deals. */
+const inDefaultList = ne(schema.deals.state, "cancelled");
 
 /** True when the user exists and has the Seller role. */
 export async function isSeller(db: Database, userId: string): Promise<boolean> {
@@ -79,11 +87,14 @@ export async function listDeals(
     .from(schema.deals)
     .innerJoin(buyers, eq(buyers.id, schema.deals.buyerId))
     .innerJoin(sellers, eq(sellers.id, schema.deals.sellerId))
-    .where(ownedBy(userId))
+    .where(and(ownedBy(userId), inDefaultList))
     .orderBy(desc(schema.deals.createdAt), desc(schema.deals.id))
     .limit(limit)
     .offset(offset);
-  const [totals] = await db.select({ total: count() }).from(schema.deals).where(ownedBy(userId));
+  const [totals] = await db
+    .select({ total: count() })
+    .from(schema.deals)
+    .where(and(ownedBy(userId), inDefaultList));
   return { deals: rows.map(toSummary), total: totals?.total ?? 0 };
 }
 
@@ -101,4 +112,41 @@ export async function findDeal(
     .where(and(eq(schema.deals.id, dealId), ownedBy(userId)));
   if (row === undefined) return undefined;
   return { ...toSummary(row), milestones: await listMilestones(db, dealId) };
+}
+
+/** One page of the Payouts on the Seller's own Deals, newest first. */
+export async function listSellerPayouts(
+  db: Database,
+  sellerId: string,
+  limit: number,
+  offset: number,
+): Promise<{ payouts: PayoutHistoryItem[]; total: number }> {
+  const mine = eq(schema.deals.sellerId, sellerId);
+  const rows = await db
+    .select({
+      id: schema.payouts.id,
+      dealId: schema.deals.id,
+      dealTitle: schema.deals.title,
+      milestoneTitle: schema.milestones.title,
+      amountMinor: schema.milestones.amountMinor,
+      state: schema.payouts.state,
+      createdAt: schema.payouts.createdAt,
+    })
+    .from(schema.payouts)
+    .innerJoin(schema.milestones, eq(schema.milestones.id, schema.payouts.milestoneId))
+    .innerJoin(schema.deals, eq(schema.deals.id, schema.milestones.dealId))
+    .where(mine)
+    .orderBy(desc(schema.payouts.createdAt), desc(schema.payouts.id))
+    .limit(limit)
+    .offset(offset);
+  const [totals] = await db
+    .select({ total: count() })
+    .from(schema.payouts)
+    .innerJoin(schema.milestones, eq(schema.milestones.id, schema.payouts.milestoneId))
+    .innerJoin(schema.deals, eq(schema.deals.id, schema.milestones.dealId))
+    .where(mine);
+  return {
+    payouts: rows.map((row) => ({ ...row, createdAt: row.createdAt.toISOString() })),
+    total: totals?.total ?? 0,
+  };
 }

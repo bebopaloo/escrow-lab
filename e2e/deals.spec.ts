@@ -140,3 +140,38 @@ test("a Seller sends evidence, the Buyer rejects it, then accepts the new eviden
   await expect(page.getByRole("heading", { name: "Approval queue" })).toBeFocused();
   await expect(page.getByRole("listitem").filter({ hasText: title })).toHaveCount(0);
 });
+
+test("a Buyer and a Seller add notes to a Deal and both see them, newest first", async ({
+  page,
+}) => {
+  const title = `Remarks ${Date.now().toString()}`;
+  await page.goto("/");
+  await page.getByRole("button", { name: /Bob Buyer/ }).click();
+  await page.getByRole("button", { name: "Create a Deal" }).click();
+  await page.getByLabel("Seller").selectOption({ label: "Carol Seller" });
+  await page.getByLabel("Deal title").fill(title);
+  await page.getByLabel("Total (£)").fill("1000");
+  await page.getByLabel("Milestone 1 title").fill("Draft");
+  await page.getByLabel("Milestone 1 amount (£)").fill("1000");
+  await page.getByRole("button", { name: "Create the Deal" }).click();
+  await expect(page.getByRole("heading", { name: title })).toBeFocused();
+
+  await page.getByLabel("Add a note").fill("Please send the draft by Friday.");
+  await page.getByRole("button", { name: "Add the note" }).click();
+  await expect(page.getByRole("region", { name: "Notes" }).getByRole("listitem")).toHaveCount(1);
+  await expect(page.getByLabel("Add a note")).toHaveValue("");
+  await page.getByRole("button", { name: "Sign out" }).click();
+
+  await page.getByRole("button", { name: /Carol Seller/ }).click();
+  await page.getByRole("link", { name: title }).click();
+  await page.getByLabel("Add a note").fill("Will do.");
+  await page.getByRole("button", { name: "Add the note" }).click();
+  const items = page.getByRole("region", { name: "Notes" }).getByRole("listitem");
+  await expect(items).toHaveCount(2);
+  await expect(items.nth(0)).toContainText("Will do.");
+  await expect(items.nth(0)).toContainText("Carol Seller");
+  await expect(items.nth(1)).toContainText("Please send the draft by Friday.");
+  await expect(items.nth(1)).toContainText("Bob Buyer");
+  const results = await new AxeBuilder({ page }).withTags(WCAG_22_AA).analyze();
+  expect(results.violations).toEqual([]);
+});

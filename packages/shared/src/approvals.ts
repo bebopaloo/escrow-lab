@@ -1,12 +1,9 @@
 import { z } from "zod";
-import { DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE } from "./deals.ts";
+import { DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE, PayoutState } from "./deals.ts";
 
 export const WRONG_PAYOUT_STATE = "The Payout cannot be approved in this state.";
 
 export const WRONG_RETRY_STATE = "Only a failed Payout can be retried.";
-
-export const PayoutState = z.enum(["pending", "confirmed", "failed"]);
-export type PayoutState = z.infer<typeof PayoutState>;
 
 /** The body of an approve request: no fields. The amount and the Seller come from the database. */
 export const ApprovePayoutRequest = z.object({}).strict();
@@ -35,6 +32,17 @@ export const ApprovalItem = z.discriminatedUnion("kind", [
   z
     .object({
       kind: z.literal("milestone"),
+      id: z.uuid(),
+      ...QueueBase,
+      title: z.string(),
+      position: z.number().int().min(1),
+      amountMinor: z.number().int(),
+    })
+    .strict(),
+  /** An express Payout that waits for an Approver. Its `id` is the Milestone id, as for `milestone`. */
+  z
+    .object({
+      kind: z.literal("express_payout"),
       id: z.uuid(),
       ...QueueBase,
       title: z.string(),
@@ -80,3 +88,26 @@ export const ApprovalQueueResponse = z
   })
   .strict();
 export type ApprovalQueueResponse = z.infer<typeof ApprovalQueueResponse>;
+
+export const PayoutHistoryItem = z
+  .object({
+    id: z.uuid(),
+    dealId: z.uuid(),
+    dealTitle: z.string(),
+    milestoneTitle: z.string(),
+    amountMinor: z.number().int(),
+    state: PayoutState,
+    createdAt: z.string(),
+  })
+  .strict();
+export type PayoutHistoryItem = z.infer<typeof PayoutHistoryItem>;
+
+export const PayoutHistoryResponse = z
+  .object({
+    payouts: z.array(PayoutHistoryItem),
+    total: z.number().int(),
+    limit: z.number().int(),
+    offset: z.number().int(),
+  })
+  .strict();
+export type PayoutHistoryResponse = z.infer<typeof PayoutHistoryResponse>;

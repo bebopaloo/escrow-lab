@@ -58,7 +58,17 @@ export const deals = pgTable(
       .notNull()
       .default("GBP"),
     state: text("state", {
-      enum: ["draft", "funding", "funding_failed", "funded", "completed"],
+      enum: [
+        "draft",
+        "funding",
+        "funding_failed",
+        "funded",
+        "completed",
+        "cancelled",
+        "refunding",
+        "refund_failed",
+        "refunded",
+      ],
     })
       .notNull()
       .default("draft"),
@@ -76,7 +86,7 @@ export const deals = pgTable(
     check("deals_currency_check", sql`${table.currency} = 'GBP'`),
     check(
       "deals_state_check",
-      sql`${table.state} in ('draft', 'funding', 'funding_failed', 'funded', 'completed')`,
+      sql`${table.state} in ('draft', 'funding', 'funding_failed', 'funded', 'completed', 'cancelled', 'refunding', 'refund_failed', 'refunded')`,
     ),
   ],
 );
@@ -147,9 +157,10 @@ export const payouts = pgTable(
       .default("pending"),
     attempts: integer("attempts").notNull().default(0),
     nextTryAt: timestamp("next_try_at", { withTimezone: true }),
-    approvedBy: uuid("approved_by")
-      .notNull()
-      .references(() => users.id),
+    /** Null until an Approver approves an express Payout ([CTRL-PAY-01]). */
+    approvedBy: uuid("approved_by").references(() => users.id),
+    /** An express Payout waits at the head of the approval queue for an Approver. */
+    express: boolean("express").notNull().default(false),
     chainTxId: text("chain_tx_id"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
@@ -159,5 +170,26 @@ export const payouts = pgTable(
     index("payouts_approved_by_idx").on(table.approvedBy),
     index("payouts_state_idx").on(table.state),
     check("payouts_state_check", sql`${table.state} in ('pending', 'confirmed', 'failed')`),
+  ],
+);
+
+/** Insert only: a note cannot be edited or deleted. */
+export const dealNotes = pgTable(
+  "deal_notes",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    dealId: uuid("deal_id")
+      .notNull()
+      .references(() => deals.id),
+    authorId: uuid("author_id")
+      .notNull()
+      .references(() => users.id),
+    text: text("text").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index("deal_notes_deal_id_created_at_idx").on(table.dealId, table.createdAt),
+    index("deal_notes_author_id_idx").on(table.authorId),
+    check("deal_notes_text_check", sql`char_length(${table.text}) between 1 and 1000`),
   ],
 );

@@ -1,4 +1,4 @@
-<!-- factory-core 0.9.0: from Rule template coding. The team owns this file. -->
+<!-- factory-core 0.50.0: from Rule template coding. The team owns this file. -->
 # Coding
 
 ## Input validation

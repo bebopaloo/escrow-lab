@@ -9,6 +9,7 @@ import { createFundingRetryJob } from "../src/modules/payout/index.ts";
 import { openTestDatabase, testConfig } from "./database.ts";
 
 export const ALICE = SEED_USERS[0]?.id ?? "";
+export const BOB = SEED_USERS[1]?.id ?? "";
 export const CAROL = SEED_USERS[2]?.id ?? "";
 export const ERIN = SEED_USERS[4]?.id ?? "";
 

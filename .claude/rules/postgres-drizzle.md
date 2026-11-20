@@ -1,4 +1,4 @@
-<!-- stack-ts 0.8.0: from Rule template postgres-drizzle. The team owns this file. -->
+<!-- stack-ts 0.15.1: from Rule template postgres-drizzle. The team owns this file. -->
 # Postgres with Drizzle
 
 ## Schema and migrations
@@ -7,7 +7,7 @@
 - Read every generated migration before you commit it. Drizzle can drop and re-create a column when you meant a rename.
 - Never edit a migration that has run outside your machine. Write a new one.
 - Never run `drizzle-kit push` against a shared database. Apply migrations with `drizzle-kit migrate` only.
-- Make a breaking change in steps, so the old and the new code both work during a deploy: add the new column, write to both, backfill, read from the new one, then drop the old one in a later release.
+- Make a breaking change in steps, so the old and the new code both work during a deploy: add the new column, write to both, backfill, read from the new one, then drop the old one in a later release. The drop makes the pull request `sensitive`, so its Release needs the Operator's Release approval: a rollback runs the old code against the new schema.
 - Every foreign key column has an index. Add an index for every filter that a list route uses.
 
 ## Queries

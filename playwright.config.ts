@@ -1,9 +1,13 @@
 import { createServer, type Server } from "node:net";
 import { defineConfig, devices } from "@playwright/test";
+import { CHECKOUT_FOLDER, worktreeDatabaseUrl } from "./worktree-env.ts";
 
 // E2E_BASE_URL points the tests at a running preview. Without it, Playwright
-// starts the dev servers itself, on free ports, so two worktrees can run their
-// end-to-end tests at the same time.
+// starts the dev servers itself, on free ports and on a database of its own
+// (`app_e2e_<folder>`, new for each run), so two worktrees can run their
+// end-to-end tests at the same time. A DATABASE_URL from the caller (CI) is
+// used as it is, and only migrated. The specs and the dev servers share it
+// through the environment.
 const previewURL = process.env.E2E_BASE_URL;
 const ci = process.env.CI !== undefined;
 
@@ -40,6 +44,18 @@ if (
   process.env.E2E_API_PORT ??= apiPort;
 }
 
+// The first load derives the database of this worktree and keeps it in the
+// environment, so the dev servers, the workers and the commands that a spec runs
+// (a seed, for example) all use it. A DATABASE_URL from the caller stays as it is.
+if (previewURL === undefined && process.env.DATABASE_URL === undefined) {
+  process.env.DATABASE_URL = worktreeDatabaseUrl(
+    "e2e",
+    CHECKOUT_FOLDER,
+    process.env.DB_PORT ?? "41032",
+  );
+  process.env.E2E_RECREATE_DATABASE = "1";
+}
+
 const devURL = `http://127.0.0.1:${process.env.E2E_WEB_PORT ?? ""}`;
 const baseURL = previewURL ?? devURL;
 
@@ -57,7 +73,7 @@ export default defineConfig({
     ? {}
     : {
         webServer: {
-          command: "pnpm dev",
+          command: "pnpm --filter @escrow-lab/api e2e:db && pnpm dev",
           url: devURL,
           reuseExistingServer: !ci,
           timeout: 60_000,
@@ -67,6 +83,8 @@ export default defineConfig({
             WEB_PORT: process.env.E2E_WEB_PORT ?? "",
             PORT: process.env.E2E_API_PORT ?? "",
             CORS_ORIGINS: devURL,
+            // The e2e specs approve Payouts by hand, so the demo loop must not pay first.
+            DEMO_AUTO_APPROVE: "false",
           },
         },
       }),

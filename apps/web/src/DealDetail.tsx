@@ -1,6 +1,8 @@
 import { useRef } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import type { DealMilestoneResponse } from "@escrow-lab/shared";
 import { fetchDeal, fundDeal, NotFoundError, PaymentFailedError } from "./api.ts";
+import { DealNotes } from "./DealNotes.tsx";
 import { MilestoneEvidence } from "./MilestoneEvidence.tsx";
 import { formatMoney } from "./money.ts";
 
@@ -65,6 +67,11 @@ export function DealDetail({ id, userId, role, csrfToken, onBack }: DealDetailPr
             Total: {formatMoney(deal.data.totalMinor)}. State: {deal.data.state.replace("_", " ")}.
           </p>
           <p>Express: {deal.data.express ? "on" : "off"}.</p>
+          <p>
+            <a href={`/api/deals/${encodeURIComponent(id)}/audit.csv`} download>
+              Export audit trail
+            </a>
+          </p>
           {canFund && (
             <button
               type="button"
@@ -94,6 +101,7 @@ export function DealDetail({ id, userId, role, csrfToken, onBack }: DealDetailPr
                 <th scope="col">Title</th>
                 <th scope="col">Amount</th>
                 <th scope="col">State</th>
+                <th scope="col">Payout</th>
               </tr>
             </thead>
             <tbody>
@@ -103,6 +111,7 @@ export function DealDetail({ id, userId, role, csrfToken, onBack }: DealDetailPr
                   <td>{milestone.title}</td>
                   <td>{formatMoney(milestone.amountMinor)}</td>
                   <td>{milestone.state.replace("_", " ")}</td>
+                  <td>{payoutWords(milestone)}</td>
                 </tr>
               ))}
             </tbody>
@@ -116,6 +125,7 @@ export function DealDetail({ id, userId, role, csrfToken, onBack }: DealDetailPr
               csrfToken={csrfToken}
             />
           )}
+          {isParticipant && <DealNotes dealId={id} csrfToken={csrfToken} />}
         </>
       )}
     </section>
@@ -126,4 +136,25 @@ function fundError(error: Error): string {
   return error instanceof PaymentFailedError
     ? error.message
     : "The Deal cannot be funded now. Reload this page.";
+}
+
+const dateFormatter = new Intl.DateTimeFormat("en-GB", {
+  day: "numeric",
+  month: "long",
+  year: "numeric",
+  timeZone: "UTC",
+});
+
+/** The Payout of a Milestone in plain words. Empty when the Milestone is not yet at the Payout step. */
+function payoutWords(milestone: DealMilestoneResponse): string {
+  const { payout } = milestone;
+  if (payout === null) return milestone.state === "accepted" ? "Waiting for an Approver" : "";
+  if (payout.state === "confirmed") {
+    return payout.paidAt === null
+      ? "Paid"
+      : `Paid on ${dateFormatter.format(new Date(payout.paidAt))}`;
+  }
+  return payout.state === "pending"
+    ? "Payment to the Seller is on its way"
+    : "Payment to the Seller failed. An Approver will retry it.";
 }
