@@ -2,10 +2,11 @@ import { schema, type Database } from "@escrow-lab/db";
 import type {
   CreateDealRequest,
   DealResponse,
+  DealState,
   DealSummary,
   PayoutHistoryItem,
 } from "@escrow-lab/shared";
-import { and, count, desc, eq, inArray, ne, or } from "drizzle-orm";
+import { and, count, desc, eq, ilike, inArray, ne, or, type SQL } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { recordAuditEvent } from "../audit/index.ts";
 import { insertMilestones, listMilestones } from "../milestones/index.ts";
@@ -73,26 +74,44 @@ export async function createDeal(
   });
 }
 
+/** Escapes `\`, `%` and `_`, so that a search text matches only itself. */
+function escapeLike(text: string): string {
+  return text.replace(/[\\%_]/g, (char) => `\\${char}`);
+}
+
+export interface ListDealsOptions {
+  limit: number;
+  offset: number;
+  /** Matches the Deal title, ignoring case. */
+  q?: string | undefined;
+  /** Shows only the Deals in this state. Without it the list hides cancelled Deals. */
+  state?: DealState | undefined;
+}
+
 /** One page of the Deals where the user is the Buyer or the Seller, newest first. */
 export async function listDeals(
   db: Database,
   userId: string,
-  limit: number,
-  offset: number,
+  { limit, offset, q, state }: ListDealsOptions,
 ): Promise<{ deals: DealSummary[]; total: number }> {
+  const filters: (SQL | undefined)[] = [
+    ownedBy(userId),
+    state === undefined ? inDefaultList : eq(schema.deals.state, state),
+  ];
+  if (q !== undefined && q !== "") {
+    filters.push(ilike(schema.deals.title, `%${escapeLike(q)}%`));
+  }
+  const where = and(...filters);
   const rows = await db
     .select(summaryColumns)
     .from(schema.deals)
     .innerJoin(buyers, eq(buyers.id, schema.deals.buyerId))
     .innerJoin(sellers, eq(sellers.id, schema.deals.sellerId))
-    .where(and(ownedBy(userId), inDefaultList))
+    .where(where)
     .orderBy(desc(schema.deals.createdAt), desc(schema.deals.id))
     .limit(limit)
     .offset(offset);
-  const [totals] = await db
-    .select({ total: count() })
-    .from(schema.deals)
-    .where(and(ownedBy(userId), inDefaultList));
+  const [totals] = await db.select({ total: count() }).from(schema.deals).where(where);
   return { deals: rows.map(toSummary), total: totals?.total ?? 0 };
 }
 
