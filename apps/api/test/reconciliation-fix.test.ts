@@ -35,7 +35,7 @@ describe("Fix a mismatch", () => {
     await database.close();
   });
 
-  async function post(userId: string, url: string) {
+  async function post(userId: string, url: string, withToken = true) {
     const visit = await app.inject({ method: "GET", url: "/api/session" });
     const token = SessionResponse.parse(visit.json()).csrfToken;
     const signedIn = await app.inject({
@@ -49,7 +49,7 @@ describe("Fix a mismatch", () => {
       url,
       headers: {
         cookie: cookieOf(signedIn),
-        "x-csrf-token": SessionResponse.parse(signedIn.json()).csrfToken,
+        ...(withToken ? { "x-csrf-token": SessionResponse.parse(signedIn.json()).csrfToken } : {}),
       },
       payload: {},
     });
@@ -193,5 +193,26 @@ describe("Fix a mismatch", () => {
     expect((await post(ALICE, fixUrl(s.mismatchId))).statusCode).toBe(403);
     expect((await post(CAROL, fixUrl(s.mismatchId))).statusCode).toBe(403);
     expect((await mismatchOf(s.mismatchId))?.closedAt).toBeNull();
+  });
+
+  it("[CTRL-PAY-02] lets only one of two Fix calls at the same time pass", async () => {
+    const s = await seed();
+    const results = await Promise.all([
+      post(ERIN, fixUrl(s.mismatchId)),
+      post(ERIN, fixUrl(s.mismatchId)),
+    ]);
+    expect(results.map((r) => r.statusCode).sort()).toEqual([200, 409]);
+    expect(await ledgerOf(s.dealId)).toHaveLength(1);
+    expect((await auditOf(s.dealId)).filter((a) => a === "fix_mismatch")).toHaveLength(1);
+  });
+
+  it("answers 401 with no session and 403 with no CSRF token, and changes nothing", async () => {
+    const s = await seed();
+    const anonymous = await app.inject({ method: "POST", url: fixUrl(s.mismatchId), payload: {} });
+    expect(anonymous.statusCode).toBe(401);
+    expect((await post(ERIN, fixUrl(s.mismatchId), false)).statusCode).toBe(403);
+    expect(await ledgerOf(s.dealId)).toHaveLength(0);
+    expect((await mismatchOf(s.mismatchId))?.closedAt).toBeNull();
+    expect(await auditOf(s.dealId)).not.toContain("fix_mismatch");
   });
 });
