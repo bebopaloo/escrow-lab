@@ -107,6 +107,38 @@ describe("App", () => {
     expect(screen.queryByRole("heading", { name: "Deals" })).not.toBeInTheDocument();
   });
 
+  it("lets an Approver open the Reconciliation page and go back to the queue", async () => {
+    server.use(
+      http.get("*/api/approvals", () =>
+        HttpResponse.json({ items: [], total: 0, limit: 100, offset: 0 }),
+      ),
+      http.get("*/api/reconciliation/mismatches", () =>
+        HttpResponse.json({ items: [], total: 0, oldCount: 0, limit: 20, offset: 0 }),
+      ),
+      http.get("*/api/health", () => HttpResponse.json({ status: "ok" })),
+      http.get("*/api/session", () => HttpResponse.json({ user: USERS[2], csrfToken: "token-1" })),
+    );
+    renderApp();
+    await userEvent.click(await screen.findByRole("button", { name: "Reconciliation" }));
+    expect(await screen.findByRole("heading", { name: "Reconciliation" })).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Approval queue" })).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Approval queue" }));
+    expect(await screen.findByRole("heading", { name: "Approval queue" })).toBeInTheDocument();
+  });
+
+  it("shows no Reconciliation button to a Buyer", async () => {
+    server.use(
+      http.get("*/api/deals", () =>
+        HttpResponse.json({ items: [], total: 0, limit: 100, offset: 0 }),
+      ),
+      http.get("*/api/health", () => HttpResponse.json({ status: "ok" })),
+      http.get("*/api/session", () => HttpResponse.json({ user: USERS[0], csrfToken: "token-1" })),
+    );
+    renderApp();
+    await screen.findByRole("heading", { name: "Deals" });
+    expect(screen.queryByRole("button", { name: "Reconciliation" })).not.toBeInTheDocument();
+  });
+
   it("signs out and shows the sign-in page", async () => {
     let signedOut = false;
     let token: string | null = null;
