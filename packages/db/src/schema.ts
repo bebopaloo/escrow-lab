@@ -158,6 +158,7 @@ export const payouts = pgTable(
       .notNull()
       .references(() => users.id),
     chainTxId: text("chain_tx_id"),
+    sellerReference: text("seller_reference"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [
@@ -166,6 +167,10 @@ export const payouts = pgTable(
     index("payouts_approved_by_idx").on(table.approvedBy),
     index("payouts_state_idx").on(table.state),
     check("payouts_state_check", sql`${table.state} in ('pending', 'confirmed', 'failed')`),
+    check(
+      "payouts_seller_reference_check",
+      sql`${table.sellerReference} is null or char_length(${table.sellerReference}) <= 40`,
+    ),
   ],
 );
 

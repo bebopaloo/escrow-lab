@@ -374,9 +374,13 @@ describe("Payout words on the Deal page", () => {
     ...DETAIL,
     state: "funded",
     milestones: [
-      milestone(1, "paid", { state: "confirmed", paidAt: "2026-11-14T23:30:00.000Z" }),
-      milestone(2, "accepted", { state: "pending", paidAt: null }),
-      milestone(3, "accepted", { state: "failed", paidAt: null }),
+      milestone(1, "paid", {
+        state: "confirmed",
+        paidAt: "2026-11-14T23:30:00.000Z",
+        sellerReference: null,
+      }),
+      milestone(2, "accepted", { state: "pending", paidAt: null, sellerReference: null }),
+      milestone(3, "accepted", { state: "failed", paidAt: null, sellerReference: null }),
       milestone(4, "accepted", null),
       milestone(5, "pending", null),
     ],
@@ -398,6 +402,76 @@ describe("Payout words on the Deal page", () => {
     expect(
       screen.getAllByText(/Paid on|Payment to the Seller|Waiting for an Approver/),
     ).toHaveLength(4);
+  });
+});
+
+describe("Seller reference of a Payout", () => {
+  const PAID_ID = "22222222-2222-4222-8222-222222222231";
+  const withReference = (sellerReference: string | null) => ({
+    ...DETAIL,
+    state: "funded",
+    milestones: [
+      {
+        ...DETAIL.milestones[0],
+        id: PAID_ID,
+        state: "paid",
+        payout: { state: "confirmed", paidAt: "2026-11-14T23:30:00.000Z", sellerReference },
+      },
+      { ...DETAIL.milestones[1], state: "awaiting_evidence" },
+    ],
+  });
+  async function openDeal() {
+    await userEvent.click(await screen.findByRole("link", { name: /Logo design/ }));
+    await screen.findByRole("heading", { name: "Logo design" });
+  }
+
+  it("shows the reference next to the Payout to the Buyer, with no form", async () => {
+    signedInAs(ALICE);
+    server.use(
+      http.get(`*/api/deals/${DEAL_ID}`, () => HttpResponse.json(withReference("INV-2041"))),
+    );
+    renderApp();
+    await openDeal();
+    const row = within(await screen.findByRole("row", { name: /Draft/ }));
+    expect(row.getByText("Reference: INV-2041")).toBeVisible();
+    expect(screen.queryByLabelText(/Reference for/)).not.toBeInTheDocument();
+  });
+
+  it("lets the Seller set the reference with the CSRF token, then shows it", async () => {
+    signedInAs(CAROL);
+    let current: string | null = null;
+    let sent: { body: unknown; token: string | null } | undefined;
+    server.use(
+      http.get(`*/api/deals/${DEAL_ID}`, () => HttpResponse.json(withReference(current))),
+      http.put(`*/api/deals/${DEAL_ID}/milestones/${PAID_ID}/reference`, async ({ request }) => {
+        sent = { body: await request.json(), token: request.headers.get("x-csrf-token") };
+        current = "INV-2041";
+        return HttpResponse.json({ reference: current });
+      }),
+    );
+    renderApp();
+    await openDeal();
+    const input = await screen.findByLabelText("Reference for Draft");
+    expect(input).toHaveAttribute("maxlength", "40");
+    await userEvent.type(input, "INV-2041");
+    await userEvent.click(screen.getByRole("button", { name: "Save the reference for Draft" }));
+    expect(await screen.findByText("Reference: INV-2041")).toBeVisible();
+    expect(sent).toEqual({ body: { reference: "INV-2041" }, token: "token-1" });
+  });
+
+  it("shows an error when the reference is not saved", async () => {
+    signedInAs(CAROL);
+    server.use(
+      http.get(`*/api/deals/${DEAL_ID}`, () => HttpResponse.json(withReference(null))),
+      http.put(`*/api/deals/${DEAL_ID}/milestones/${PAID_ID}/reference`, () =>
+        HttpResponse.json({ error: "Not found" }, { status: 404 }),
+      ),
+    );
+    renderApp();
+    await openDeal();
+    await userEvent.type(await screen.findByLabelText("Reference for Draft"), "INV-1");
+    await userEvent.click(screen.getByRole("button", { name: "Save the reference for Draft" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("The reference was not saved.");
   });
 });
 
