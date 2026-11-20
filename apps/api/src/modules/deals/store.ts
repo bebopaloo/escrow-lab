@@ -23,6 +23,7 @@ const summaryColumns = {
   sellerName: sellers.displayName,
   totalMinor: schema.deals.totalMinor,
   currency: schema.deals.currency,
+  express: schema.deals.express,
   state: schema.deals.state,
   createdAt: schema.deals.createdAt,
 };
@@ -64,6 +65,7 @@ export async function createDeal(
         sellerId: request.sellerId,
         title: request.title,
         totalMinor: request.totalMinor,
+        express: request.express,
         state: "draft",
       })
       .returning({ id: schema.deals.id });

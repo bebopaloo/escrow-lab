@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen, within } from "@testing-library/react";
+import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { delay, http, HttpResponse } from "msw";
 import { describe, expect, it, vi } from "vitest";
@@ -27,6 +27,7 @@ const SUMMARY = {
   sellerName: CAROL.displayName,
   totalMinor: 100_000,
   currency: "GBP",
+  express: true,
   state: "draft",
   createdAt: "2026-11-14T10:00:00.000Z",
 };
@@ -207,6 +208,24 @@ describe("Deal detail", () => {
     expect(within(table).getByText("£600.00")).toBeInTheDocument();
   });
 
+  it("shows whether the Deal is express, with no control to change it", async () => {
+    for (const [express, text] of [
+      [true, "Express: on."],
+      [false, "Express: off."],
+    ] as const) {
+      server.resetHandlers();
+      signedInAs(ALICE);
+      server.use(
+        http.get(`*/api/deals/${DEAL_ID}`, () => HttpResponse.json({ ...DETAIL, express })),
+      );
+      renderApp();
+      await userEvent.click(await screen.findByRole("link", { name: /Logo design/ }));
+      expect(await screen.findByText(text)).toBeInTheDocument();
+      expect(screen.queryByRole("checkbox")).not.toBeInTheDocument();
+      cleanup();
+    }
+  });
+
   it("offers the audit trail as a CSV download", async () => {
     signedInAs(CAROL);
     renderApp();
@@ -276,11 +295,36 @@ describe("Create Deal", () => {
         sellerId: CAROL.id,
         title: "Logo design",
         totalMinor: 100_000,
+        express: true,
         milestones: [
           { title: "Draft", amountMinor: 40_000 },
           { title: "Final", amountMinor: 60_000 },
         ],
       },
+    });
+  });
+
+  it("sends express off when the Buyer clears the Express box", async () => {
+    signedInAs(ALICE);
+    let sent: unknown;
+    server.use(
+      http.post("*/api/deals", async ({ request }) => {
+        sent = await request.json();
+        return HttpResponse.json(DETAIL, { status: 201 });
+      }),
+    );
+    renderApp();
+    await openForm();
+    expect(screen.getByRole("checkbox", { name: /Express/ })).toBeChecked();
+    await userEvent.selectOptions(await screen.findByLabelText("Seller"), CAROL.id);
+    await userEvent.type(screen.getByLabelText("Deal title"), "Logo design");
+    await userEvent.type(screen.getByLabelText("Total (£)"), "400");
+    await userEvent.type(screen.getByLabelText("Milestone 1 title"), "Draft");
+    await userEvent.type(screen.getByLabelText("Milestone 1 amount (£)"), "400");
+    await userEvent.click(screen.getByRole("checkbox", { name: /Express/ }));
+    await userEvent.click(screen.getByRole("button", { name: "Create the Deal" }));
+    await waitFor(() => {
+      expect(sent).toMatchObject({ express: false });
     });
   });
 

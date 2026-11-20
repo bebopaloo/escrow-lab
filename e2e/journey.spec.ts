@@ -48,6 +48,7 @@ test("a Buyer, a Seller and an Approver take a two-Milestone Deal from creation 
   await buyer.getByLabel("Seller").selectOption({ label: "Carol Seller" });
   await buyer.getByLabel("Deal title").fill(title);
   await buyer.getByLabel("Total (£)").fill("1000");
+  await buyer.getByRole("checkbox", { name: /Express/ }).uncheck();
   await buyer.getByLabel("Milestone 1 title").fill("Draft");
   await buyer.getByLabel("Milestone 1 amount (£)").fill("400");
   await buyer.getByRole("button", { name: "Add a Milestone" }).click();

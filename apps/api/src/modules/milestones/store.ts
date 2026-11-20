@@ -2,6 +2,7 @@ import { schema, type Database } from "@escrow-lab/db";
 import type { DealMilestoneResponse, MilestoneResponse } from "@escrow-lab/shared";
 import { and, asc, eq } from "drizzle-orm";
 import { recordAuditEvent } from "../audit/index.ts";
+import { createPendingPayout } from "../payout/index.ts";
 
 export interface NewMilestone {
   title: string;
@@ -109,6 +110,10 @@ export type MilestoneOutcome =
 /**
  * Applies one evidence action. The Milestone is found through a Deal that the user owns in the
  * right role, and its row is locked. The state change and the audit event are one transaction.
+ *
+ * An accept on a funded express Deal also queues the Payout in that transaction: it is `pending`,
+ * marked express and has no approver, and no transfer is sent. Only an Approver approves it, in
+ * the approval module ([CTRL-PAY-01]). This code never records a party to the Deal as approver.
  */
 export async function applyMilestoneAction(
   db: Database,
@@ -117,7 +122,12 @@ export async function applyMilestoneAction(
 ): Promise<MilestoneOutcome> {
   return db.transaction(async (tx) => {
     const [found] = await tx
-      .select({ dealId: schema.milestones.dealId, state: schema.milestones.state })
+      .select({
+        dealId: schema.milestones.dealId,
+        state: schema.milestones.state,
+        dealState: schema.deals.state,
+        express: schema.deals.express,
+      })
       .from(schema.milestones)
       .innerJoin(schema.deals, eq(schema.deals.id, schema.milestones.dealId))
       .where(
@@ -150,6 +160,14 @@ export async function applyMilestoneAction(
       action: action.kind,
       dealId: found.dealId,
     });
+    if (action.kind === "accept" && found.express && found.dealState === "funded") {
+      await createPendingPayout(tx, { milestoneId, express: true });
+      await recordAuditEvent(tx, {
+        userId: action.buyerId,
+        action: "express_payout",
+        dealId: found.dealId,
+      });
+    }
     return { kind: "done", milestone };
   });
 }

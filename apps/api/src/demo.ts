@@ -1,5 +1,5 @@
 import { SEED_USERS, schema, type Database } from "@escrow-lab/db";
-import { and, asc, eq, notExists } from "drizzle-orm";
+import { and, asc, eq, exists, isNull, notExists, or } from "drizzle-orm";
 import type { Chain } from "./adapters/chain/index.ts";
 import { approvePayout } from "./modules/approval/index.ts";
 
@@ -20,7 +20,7 @@ export interface DemoLoopOptions {
 }
 
 /**
- * Demo mode. Each run pays every `accepted` Milestone that has no Payout on a `funded` Deal, with
+ * Demo mode. Each run pays every `accepted` Milestone on a `funded` Deal that has no Payout, or that has an express Payout with no approver, with
  * the seeded Approver as approver. It uses `approvePayout`, so a demo Payout has the same
  * Idempotency key, ledger entry and `approve_payout` audit event as a real one.
  */
@@ -47,11 +47,27 @@ export function createDemoLoop(options: DemoLoopOptions) {
         and(
           eq(schema.milestones.state, "accepted"),
           eq(schema.deals.state, "funded"),
-          notExists(
-            db
-              .select({ id: schema.payouts.id })
-              .from(schema.payouts)
-              .where(eq(schema.payouts.milestoneId, schema.milestones.id)),
+          or(
+            notExists(
+              db
+                .select({ id: schema.payouts.id })
+                .from(schema.payouts)
+                .where(eq(schema.payouts.milestoneId, schema.milestones.id)),
+            ),
+            // An express Payout waits for an approver. `approvePayout` claims it for the demo Approver.
+            exists(
+              db
+                .select({ id: schema.payouts.id })
+                .from(schema.payouts)
+                .where(
+                  and(
+                    eq(schema.payouts.milestoneId, schema.milestones.id),
+                    eq(schema.payouts.express, true),
+                    eq(schema.payouts.state, "pending"),
+                    isNull(schema.payouts.approvedBy),
+                  ),
+                ),
+            ),
           ),
         ),
       )

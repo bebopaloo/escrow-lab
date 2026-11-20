@@ -64,6 +64,13 @@
       "when": 1795162632067,
       "tag": "0008_clever_namorita",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1795163712728,
+      "tag": "0009_rapid_strong_guy",
+      "breakpoints": true
     }
   ]
 }

@@ -23,6 +23,7 @@ function ItemBody({ item }: { item: ApprovalItem }) {
       <strong id={headingId}>
         Milestone {item.position}: {item.title}
       </strong>
+      {item.kind === "express_payout" && <mark>express</mark>}
       <p>
         Deal {item.dealTitle}. Amount {formatMoney(item.amountMinor)}.
         {item.kind === "failed_payout" && " Payout failed."}
@@ -88,7 +89,7 @@ export function ApprovalQueue({ csrfToken }: ApprovalQueueProps) {
               aria-labelledby={`approval-${item.kind}-${item.id}`}
             >
               <ItemBody item={item} />
-              {item.kind === "milestone" && (
+              {(item.kind === "milestone" || item.kind === "express_payout") && (
                 <button
                   type="button"
                   disabled={approve.isPending}
