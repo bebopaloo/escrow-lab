@@ -1,6 +1,6 @@
 import { schema, type Database } from "@escrow-lab/db";
 import type { ApprovalItem } from "@escrow-lab/shared";
-import { and, count, eq, notExists, sql } from "drizzle-orm";
+import { and, count, eq, isNull, lt, notExists, sql } from "drizzle-orm";
 import { unionAll } from "drizzle-orm/pg-core";
 
 export interface QueuePage {
@@ -95,4 +95,16 @@ export async function listApprovalQueue(
   });
   const total = (milestoneCount[0]?.n ?? 0) + (payoutCount[0]?.n ?? 0) + (dealCount[0]?.n ?? 0);
   return { items, total };
+}
+
+const OLD_MISMATCH_MS = 24 * 60 * 60 * 1000;
+
+/** The open mismatches that were found more than 24 hours before `now`. */
+export async function countOldMismatches(db: Database, now: Date): Promise<number> {
+  const cutoff = new Date(now.getTime() - OLD_MISMATCH_MS);
+  const [row] = await db
+    .select({ n: count() })
+    .from(schema.mismatches)
+    .where(and(isNull(schema.mismatches.closedAt), lt(schema.mismatches.foundAt, cutoff)));
+  return row?.n ?? 0;
 }

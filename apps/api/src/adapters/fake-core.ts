@@ -20,7 +20,14 @@ export interface FakeCore {
   readonly moved: number;
   readonly events: readonly FakeEvent[];
   run(party: string, amount: number, key: string): Promise<Result>;
+  /** Reads a key. It takes the next step of the script, and a `fail` or `lose_reply` step fails the read. */
+  status(key: string): Promise<KeyStatus>;
 }
+
+export type KeyStatus =
+  | { state: "confirmed"; txId: string; amount: number }
+  | { state: "unknown" }
+  | { state: "failed"; failure: Failure };
 
 interface Seen {
   party: string;
@@ -69,6 +76,15 @@ export function createFakeCore(script: readonly Step[] = []): FakeCore {
       if (step.kind === "duplicate_event") events.push({ ...event });
       if (step.kind === "lose_reply") return { ok: false, failure: "timeout" };
       return result;
+    },
+    async status(key) {
+      const step: Step = steps.shift() ?? { kind: "ok" };
+      if (step.kind === "delay") await sleep(step.ms);
+      if (step.kind === "fail") return { state: "failed", failure: step.failure };
+      if (step.kind === "lose_reply") return { state: "failed", failure: "timeout" };
+      const known = seen.get(key);
+      if (known?.result.ok !== true) return { state: "unknown" };
+      return { state: "confirmed", txId: known.result.txId, amount: known.amount };
     },
   };
 }

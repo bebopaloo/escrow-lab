@@ -1,6 +1,8 @@
 import {
   ApprovalQueueResponse,
   ApprovePayoutResponse,
+  MismatchListResponse,
+  FixMismatchResponse,
   RetryPayoutResponse,
   DealListResponse,
   DealResponse,
@@ -200,4 +202,40 @@ export async function retryPayout(
     throw new RetryError("The retry failed. Reload the queue to see the current state.");
   }
   return RetryPayoutResponse.parse(await response.json());
+}
+
+/** The API refused the fix, for example because the Payout is no longer failed. */
+export class FixError extends Error {}
+
+export async function fixMismatch(
+  mismatchId: string,
+  csrfToken: string,
+): Promise<FixMismatchResponse> {
+  const response = await fetch(
+    new URL(
+      `/api/reconciliation/mismatches/${encodeURIComponent(mismatchId)}/fix`,
+      window.location.origin,
+    ),
+    {
+      method: "POST",
+      headers: { "content-type": "application/json", "x-csrf-token": csrfToken },
+      body: JSON.stringify({}),
+    },
+  );
+  if (response.status !== 200) {
+    throw new FixError("The fix failed. Reload this page to see the current state.");
+  }
+  return FixMismatchResponse.parse(await response.json());
+}
+
+export async function fetchMismatches(
+  limit: number,
+  offset: number,
+  signal?: AbortSignal,
+): Promise<MismatchListResponse> {
+  const url = new URL("/api/reconciliation/mismatches", window.location.origin);
+  url.searchParams.set("limit", String(limit));
+  url.searchParams.set("offset", String(offset));
+  const response = await fetch(url, signal ? { signal } : {});
+  return MismatchListResponse.parse(await readJson(response, 200, "Mismatch list"));
 }

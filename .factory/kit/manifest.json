@@ -1,17 +1,17 @@
 {
   "plugin": "factory-core",
-  "version": "0.34.0",
+  "version": "0.50.0",
   "files": {
-    "scripts/factory_config.py": "373176212339f06659a64fb69948c10528aed5210b0ccc8ab5e7f32c8590118c",
-    "scripts/risk_tier.py": "b94258b3a1f15fd1d7ee55748f31f719f7be3a4a94b2acc7af9a60b7ce960505",
-    "scripts/pr_sections.py": "46bfccd1910105768fe03180b024b98bdb1a53848ddcc25eacd433b8c3616d7d",
     "scripts/controls.py": "ddb3eb3f5d6e1fbdc3dc999e0cdfbb19acc4950fa2927680bf63df8758246ff2",
-    "scripts/waivers.py": "07424c4e0100fdb9401fd6e38fab42e9667cdb331a5b92be943c3003fff42d59",
-    "scripts/traceability.py": "c25a369a2930cd9296685a9905967205221641db012950223f65081592c1bd89",
-    "scripts/release_plan.py": "8ff1b6a2b637b592c805dd6b93cbc099b90e5c17d08543674f39654988ed1394",
+    "scripts/dependencies.py": "f40c53755e25de6a63d7eacea2dd056202c6064469d8fb02e9c29854817a5f49",
+    "scripts/factory_config.py": "1e96e7936be9481cfabdef6937e731e1c943f21124def203a0ac7c691f754c5c",
+    "scripts/pr_sections.py": "46bfccd1910105768fe03180b024b98bdb1a53848ddcc25eacd433b8c3616d7d",
     "scripts/release_approval.py": "813e9f79661d7dc0acedec011c18e9b39ec0c26ac8246a097509110a93866da4",
-    "scripts/release_record.py": "44a3312b5230caeb88d534fa8a019a50ab6a1c0e14195c3f0b909c0a8d95c615",
-    "scripts/dependencies.py": "0d5af48f1ea509d7e4697139e74e4927e25a2032d2166a64148df4823f59bfbf",
-    "templates/controls/profiles.toml": "3ed8711db11db4f4dc725acc8bc032c4dfbef46fd38b5e558864709079a1befa"
+    "scripts/release_plan.py": "0ee06e74dbb552e5289ae0715943d840a4189a1eac3bb6ead2fb87e994a2faf0",
+    "scripts/release_record.py": "5b690ba39deb4c5d12e05210a8afe2dd6f83e088a7e68aff310c27db1c1d4458",
+    "scripts/risk_tier.py": "b94258b3a1f15fd1d7ee55748f31f719f7be3a4a94b2acc7af9a60b7ce960505",
+    "scripts/traceability.py": "1ab550bb0a1622163e18ecd9c2d5a5a2917863c78f8de84a5d46e4a16ac97004",
+    "scripts/waivers.py": "07424c4e0100fdb9401fd6e38fab42e9667cdb331a5b92be943c3003fff42d59",
+    "templates/controls/profiles.toml": "3397ee05f54eb7ee43a0a7e176dc0c62e9c3e4ed2ff679b6ec4cd0bdb4f110f1"
   }
 }
