@@ -1,5 +1,5 @@
 {
-  "id": "2a1beb93-4bb2-4709-b64f-8a73baeaf6e0",
+  "id": "c4e188f0-eade-4936-aac3-cc9c21df8744",
   "prevId": "20c9ebb0-8ec8-4151-aaef-caa6177ddfea",
   "version": "7",
   "dialect": "postgresql",
@@ -298,21 +298,6 @@
           "isUnique": false,
           "concurrently": false,
           "method": "btree",
-          "with": {}
-        },
-        "deals_title_trgm_idx": {
-          "name": "deals_title_trgm_idx",
-          "columns": [
-            {
-              "expression": "\"title\" gin_trgm_ops",
-              "asc": true,
-              "isExpression": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "gin",
           "with": {}
         }
       },
@@ -619,6 +604,12 @@
           "primaryKey": false,
           "notNull": false
         },
+        "seller_reference": {
+          "name": "seller_reference",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
         "created_at": {
           "name": "created_at",
           "type": "timestamp with time zone",
@@ -709,6 +700,10 @@
         "payouts_state_check": {
           "name": "payouts_state_check",
           "value": "\"payouts\".\"state\" in ('pending', 'confirmed', 'failed')"
+        },
+        "payouts_seller_reference_check": {
+          "name": "payouts_seller_reference_check",
+          "value": "\"payouts\".\"seller_reference\" is null or char_length(\"payouts\".\"seller_reference\") <= 40"
         }
       },
       "isRLSEnabled": false

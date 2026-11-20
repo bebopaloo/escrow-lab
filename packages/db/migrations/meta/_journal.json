@@ -54,8 +54,15 @@
     {
       "idx": 7,
       "version": "7",
-      "when": 1795161887422,
-      "tag": "0007_free_abomination",
+      "when": 1795161860321,
+      "tag": "0007_gigantic_shadowcat",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1795162632067,
+      "tag": "0008_clever_namorita",
       "breakpoints": true
     }
   ]

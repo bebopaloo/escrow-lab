@@ -1,0 +1,2 @@
+ALTER TABLE "payouts" ADD COLUMN "seller_reference" text;--> statement-breakpoint
+ALTER TABLE "payouts" ADD CONSTRAINT "payouts_seller_reference_check" CHECK ("payouts"."seller_reference" is null or char_length("payouts"."seller_reference") <= 40);

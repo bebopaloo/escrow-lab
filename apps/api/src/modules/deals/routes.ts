@@ -13,7 +13,9 @@ import {
   PAYMENT_FAILED,
   PageQuery,
   PayoutHistoryResponse,
+  ReferenceParams,
   SELLER_MUST_BE_SELLER,
+  SetReferenceRequest,
   WRONG_DEAL_STATE,
 } from "@escrow-lab/shared";
 import type { preHandlerHookHandler } from "fastify";
@@ -27,12 +29,20 @@ import { cancelDeal } from "./cancel.ts";
 import { toCsv } from "./csv.ts";
 import { fundDeal } from "./fund.ts";
 import { addNote, listNotes } from "./notes.ts";
-import { createDeal, findDeal, isSeller, listDeals, listSellerPayouts } from "./store.ts";
+import {
+  createDeal,
+  findDeal,
+  isSeller,
+  listDeals,
+  listSellerPayouts,
+  setPayoutReference,
+} from "./store.ts";
 
 const CREATE_DEAL_LIMIT = 30;
 const FUND_DEAL_LIMIT = 30;
 const CANCEL_DEAL_LIMIT = 30;
 const ADD_NOTE_LIMIT = 30;
+const SET_REFERENCE_LIMIT = 30;
 
 export interface DealsOptions {
   db: Database;
@@ -234,6 +244,36 @@ export const dealRoutes: FastifyPluginCallbackZod<DealsOptions> = (
         return reply.status(404).send({ error: "Not found", requestId: request.id });
       }
       return reply.status(201).send(note);
+    },
+  );
+
+  app.put(
+    "/deals/:id/milestones/:milestoneId/reference",
+    {
+      config: { rateLimit: { max: SET_REFERENCE_LIMIT, timeWindow: "1 minute" } },
+      onRequest: [requireRole(db, "seller"), csrf],
+      schema: {
+        params: ReferenceParams,
+        body: SetReferenceRequest,
+        response: {
+          200: z.object({ reference: z.string().nullable() }).strict(),
+          404: ErrorResponse,
+        },
+      },
+    },
+    async (request, reply) => {
+      const { id, milestoneId } = request.params;
+      const found = await setPayoutReference(
+        db,
+        request.user?.id ?? "",
+        id,
+        milestoneId,
+        request.body.reference,
+      );
+      if (!found) {
+        return reply.status(404).send({ error: "Not found", requestId: request.id });
+      }
+      return { reference: request.body.reference === "" ? null : request.body.reference };
     },
   );
   done();
