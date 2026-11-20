@@ -66,7 +66,7 @@ describe("loadConfig", () => {
     );
   });
 
-  it("turns demo auto-approve off by default in production", () => {
+  it("[CTRL-PAY-03] turns demo auto-approve off by default in production", () => {
     const env = { DATABASE_URL, SESSION_KEY, NODE_ENV: "production" };
     expect(loadConfig(env).DEMO_AUTO_APPROVE).toBe(false);
   });
@@ -77,7 +77,7 @@ describe("loadConfig", () => {
     ).toBe(false);
   });
 
-  it("refuses DEMO_AUTO_APPROVE=true in production", () => {
+  it("[CTRL-PAY-03] refuses DEMO_AUTO_APPROVE=true in production", () => {
     const env = { DATABASE_URL, SESSION_KEY, NODE_ENV: "production", DEMO_AUTO_APPROVE: "true" };
     expect(() => loadConfig(env)).toThrow(/DEMO_AUTO_APPROVE/);
   });

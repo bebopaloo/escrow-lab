@@ -2,7 +2,7 @@ import { schema, seedUsers } from "@escrow-lab/db";
 import { eq } from "drizzle-orm";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { createFakeChain } from "../src/adapters/chain/index.ts";
-import { createDemoLoop } from "../src/demo.ts";
+import { createDemoLoop, startDemoLoopWhenOn } from "../src/demo.ts";
 import { ALICE, ERIN, startHarness, type TestDatabase } from "./harness.ts";
 import { openTestDatabase } from "./database.ts";
 
@@ -170,5 +170,29 @@ describe("Demo mode loop", () => {
     });
     demo.stop();
     expect(errors).toEqual([boom]);
+  });
+
+  it("[CTRL-PAY-03] does not start the demo loop when the setting is off", () => {
+    vi.useFakeTimers();
+    const started = startDemoLoopWhenOn(false, {
+      db: database.db,
+      chain: createFakeChain(),
+      log: { warn: (message) => warnings.push(message) },
+    });
+    expect(started).toBeUndefined();
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it("starts the demo loop when the setting is on", () => {
+    vi.useFakeTimers();
+    const started = startDemoLoopWhenOn(true, {
+      db: database.db,
+      chain: createFakeChain(),
+      log: { warn: (message) => warnings.push(message) },
+    });
+    expect(started).toBeDefined();
+    expect(vi.getTimerCount()).toBe(1);
+    started?.stop();
+    expect(vi.getTimerCount()).toBe(0);
   });
 });

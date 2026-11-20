@@ -115,7 +115,7 @@ The escrow core covers one happy journey and its failures. People who use escrow
 - **Given** `DEMO_AUTO_APPROVE` is on
 - **When** a Buyer accepts the evidence of a Milestone
 - **Then** on the next demo loop run the app pays the Milestone, with Erin Approver (`00000000-0000-4000-8000-000000000005`) as its approver
-- [ ] `DEMO_AUTO_APPROVE` is on by default when `NODE_ENV` is not `production`. Config refuses `DEMO_AUTO_APPROVE=true` when `NODE_ENV` is `production`, and a test proves it.
+- [ ] `DEMO_AUTO_APPROVE` is on by default when `NODE_ENV` is not `production`. Config refuses `DEMO_AUTO_APPROVE=true` when `NODE_ENV` is `production`, and a test proves it. The demo loop acts as the seeded Approver outside production only: `[CTRL-PAY-01]` names the case, and `[CTRL-PAY-03]` keeps it out of production.
 - [ ] The Playwright config sets `DEMO_AUTO_APPROVE=false` for the API that the e2e tests start.
 - [ ] When the seeded Approver is missing, the loop logs a warning and pays nothing.
 - [ ] Each demo Payout writes the `approve_payout` audit event for the seeded Approver.

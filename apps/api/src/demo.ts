@@ -80,3 +80,14 @@ export function createDemoLoop(options: DemoLoopOptions) {
   };
   return loop;
 }
+
+/**
+ * Starts the demo loop only when the setting is on (`CTRL-PAY-03`). Returns the running loop, or
+ * `undefined` when the setting is off, so the server never creates a timer in that case.
+ */
+export function startDemoLoopWhenOn(enabled: boolean, options: DemoLoopOptions) {
+  if (!enabled) return undefined;
+  const loop = createDemoLoop(options);
+  loop.start();
+  return loop;
+}
