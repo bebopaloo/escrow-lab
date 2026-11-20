@@ -13,7 +13,7 @@ export type ApproveOutcome =
   | { kind: "done"; payoutId: string; milestoneId: string; state: "pending" | "confirmed" };
 
 /**
- * Approves the Payout of an accepted Milestone. Transaction one locks the Milestone row, checks
+ * Approves the Payout of an accepted Milestone. Transaction one locks the Deal row and the Milestone row, checks
  * Dual control and the state, and writes the `pending` Payout with its Idempotency key and the
  * audit event. The first transfer try then runs outside any transaction, with the Seller and the
  * amount from the database. A confirmed transfer finishes the Payout; any other result leaves it
@@ -26,6 +26,18 @@ export async function approvePayout(
   milestoneId: string,
 ): Promise<ApproveOutcome> {
   const claim = await db.transaction(async (tx) => {
+    // Lock the Deal row first, as `refundDeal` does, so that a refund and this approval run one
+    // after the other. The Milestone row lock comes second in every path.
+    const [owner] = await tx
+      .select({ dealId: schema.milestones.dealId })
+      .from(schema.milestones)
+      .where(eq(schema.milestones.id, milestoneId));
+    if (owner === undefined) return { kind: "not_found" } as const;
+    await tx
+      .select({ id: schema.deals.id })
+      .from(schema.deals)
+      .where(eq(schema.deals.id, owner.dealId))
+      .for("update");
     const [found] = await tx
       .select({
         state: schema.milestones.state,

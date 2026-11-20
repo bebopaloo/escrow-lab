@@ -24,13 +24,14 @@ export interface PayoutRetryOptions {
 }
 
 /**
- * The part of the retry job for Payouts in `pending`. Each try sends the transfer again with the
+ * The part of the retry job for Payouts in `pending`. A Payout of a Deal that is not `funded` is not sent. Each try sends the transfer again with the
  * Payout's stored Idempotency key, so the chain returns its first transfer.
  */
 export function createPayoutRetry({ db, chain, now }: PayoutRetryOptions) {
   const due = (at: Date) =>
     and(
       eq(schema.payouts.state, "pending"),
+      eq(schema.deals.state, "funded"),
       or(isNull(schema.payouts.nextTryAt), lte(schema.payouts.nextTryAt, at)),
     );
 
@@ -111,6 +112,7 @@ export function createPayoutRetry({ db, chain, now }: PayoutRetryOptions) {
         .select({ id: schema.payouts.id })
         .from(schema.payouts)
         .innerJoin(schema.milestones, eq(schema.milestones.id, schema.payouts.milestoneId))
+        .innerJoin(schema.deals, eq(schema.deals.id, schema.milestones.dealId))
         .where(
           and(
             due(now()),

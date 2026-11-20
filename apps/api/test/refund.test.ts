@@ -1,11 +1,14 @@
-import { seedUsers } from "@escrow-lab/db";
+import { schema, seedUsers } from "@escrow-lab/db";
 import { ApprovalQueueResponse } from "@escrow-lab/shared";
+import { eq } from "drizzle-orm";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
+import { confirmPayout } from "../src/modules/payout/index.ts";
 import { openTestDatabase } from "./database.ts";
 import {
   ALICE,
   CAROL,
   ERIN,
+  accepted,
   approved,
   evidenceSent,
   failures,
@@ -187,5 +190,57 @@ describe("Refund a funded Deal", () => {
 
     expect(await h.snapshot(awaiting.dealId)).toEqual(first);
     expect(await h.snapshot(sent.dealId)).toEqual(second);
+  });
+
+  it("[CTRL-PAY-02] lets only one of two refunds at the same time pass", async () => {
+    const h = await start();
+    const { dealId } = await funded(h);
+
+    const results = await Promise.all([refund(h, dealId), refund(h, dealId)]);
+
+    expect(results.map((r) => r.statusCode).sort()).toEqual([200, 409]);
+    const after = await h.snapshot(dealId);
+    expect(after.deal[0]?.state).toBe("refunded");
+    expect(after.ledger.filter((e) => e.kind === "refund")).toHaveLength(1);
+    expect(after.audit.filter((e) => e.action === "refund_deal")).toHaveLength(1);
+    expect(after.calls.filter((c) => c.method === "refund")).toHaveLength(1);
+  });
+
+  it("[CTRL-PAY-02] lets a refund and a Payout approval at the same time commit only one", async () => {
+    const h = await start();
+    for (let round = 0; round < 5; round += 1) {
+      const { dealId, first } = await accepted(h);
+      const before = h.calls.length;
+
+      const [refunded, paid] = await Promise.all([refund(h, dealId), h.approve(first)]);
+
+      expect([refunded.statusCode, paid.statusCode].sort()).toEqual([200, 409]);
+      const after = await h.snapshot(dealId);
+      const made = after.calls.slice(before).map((c) => c.method);
+      expect(made).toEqual([refunded.statusCode === 200 ? "refund" : "transfer"]);
+      expect(after.ledger.filter((e) => e.kind === "refund")).toHaveLength(
+        refunded.statusCode === 200 ? 1 : 0,
+      );
+      expect(after.payouts).toHaveLength(refunded.statusCode === 200 ? 0 : 1);
+    }
+  });
+
+  it("[CTRL-PAY-02] does not send or confirm a pending Payout of a Deal that is not funded", async () => {
+    const h = await start({ chain: [{ kind: "ok" }, { kind: "fail", failure: "timeout" }] });
+    const { dealId, payoutId } = await approved(h);
+    await database.db
+      .update(schema.deals)
+      .set({ state: "refunding" })
+      .where(eq(schema.deals.id, dealId));
+    const before = (await h.snapshot(dealId)).calls.filter((c) => c.method === "transfer");
+
+    await h.runJob(dealId, 2);
+    const confirmed = await confirmPayout(database.db, { payoutId, chainTxId: "tx-late" });
+
+    expect(confirmed).toBe(false);
+    const after = await h.snapshot(dealId);
+    expect(after.calls.filter((c) => c.method === "transfer")).toHaveLength(before.length);
+    expect(after.payouts[0]?.state).toBe("pending");
+    expect(after.ledger.filter((e) => e.kind === "payout")).toEqual([]);
   });
 });

@@ -43,7 +43,7 @@ export async function hasPayout(
 /**
  * Call it when the chain confirms the transfer. One transaction: the ledger Payout, the Payout
  * `confirmed`, the Milestone `paid`, the next Milestone open or the Deal `completed`, and the audit
- * event. The amount comes from the Milestone row. A Payout that is not `pending` changes nothing.
+ * event. The amount comes from the Milestone row. A Payout that is not `pending`, or a Deal that is not `funded`, changes nothing.
  */
 export async function confirmPayout(
   db: Database,
@@ -62,6 +62,12 @@ export async function confirmPayout(
       .where(and(eq(schema.payouts.id, input.payoutId), eq(schema.payouts.state, "pending")))
       .for("update", { of: schema.payouts });
     if (row === undefined) return false;
+    const [deal] = await tx
+      .select({ state: schema.deals.state })
+      .from(schema.deals)
+      .where(eq(schema.deals.id, row.dealId))
+      .for("update");
+    if (deal?.state !== "funded") return false;
     await tx
       .update(schema.payouts)
       .set({ state: "confirmed", chainTxId: input.chainTxId, nextTryAt: null })
