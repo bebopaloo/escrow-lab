@@ -74,7 +74,7 @@ export function App() {
               {approverPage === "queue" ? (
                 <ApprovalQueue csrfToken={session.data.csrfToken} />
               ) : (
-                <Reconciliation />
+                <Reconciliation csrfToken={session.data.csrfToken} />
               )}
             </>
           ) : (

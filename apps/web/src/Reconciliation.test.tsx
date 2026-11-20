@@ -39,7 +39,7 @@ function renderPage() {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   render(
     <QueryClientProvider client={client}>
-      <Reconciliation />
+      <Reconciliation csrfToken="token-1" />
     </QueryClientProvider>,
   );
 }
@@ -48,7 +48,52 @@ function pageOf(items: unknown[], total = items.length, offset = 0, limit = 20) 
   return HttpResponse.json({ items, total, oldCount: 0, limit, offset });
 }
 
+const FIXABLE = {
+  ...ITEMS[0],
+  id: ID_1,
+  payoutId: "66666666-6666-4666-8666-666666666666",
+};
+
 describe("Reconciliation", () => {
+  it("shows Fix only for a missing in ledger mismatch with a Payout", async () => {
+    server.use(
+      http.get("*/api/reconciliation/mismatches", () => pageOf([FIXABLE, ITEMS[0], ITEMS[1]])),
+    );
+    renderPage();
+    await screen.findAllByRole("listitem");
+    expect(screen.getAllByRole("button", { name: /^Fix/ })).toHaveLength(1);
+  });
+
+  it("fixes a mismatch with the CSRF token and loads the list again", async () => {
+    let fixed = false;
+    let token: string | null = null;
+    server.use(
+      http.get("*/api/reconciliation/mismatches", () => pageOf(fixed ? [] : [FIXABLE])),
+      http.post(`*/api/reconciliation/mismatches/${FIXABLE.id}/fix`, ({ request }) => {
+        fixed = true;
+        token = request.headers.get("x-csrf-token");
+        return HttpResponse.json({ mismatchId: FIXABLE.id, payoutId: FIXABLE.payoutId });
+      }),
+    );
+    renderPage();
+    await userEvent.click(await screen.findByRole("button", { name: /^Fix.*Logo design/ }));
+    expect(await screen.findByText("There are no open mismatches.")).toBeVisible();
+    expect(token).toBe("token-1");
+  });
+
+  it("shows an error when the fix is refused", async () => {
+    server.use(
+      http.get("*/api/reconciliation/mismatches", () => pageOf([FIXABLE])),
+      http.post(
+        "*/api/reconciliation/mismatches/*/fix",
+        () => new HttpResponse(null, { status: 409 }),
+      ),
+    );
+    renderPage();
+    await userEvent.click(await screen.findByRole("button", { name: /^Fix.*Logo design/ }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("The fix failed");
+  });
+
   it("lists each mismatch with its kind, Deal, amounts, transaction id and time", async () => {
     server.use(http.get("*/api/reconciliation/mismatches", () => pageOf(ITEMS)));
     renderPage();
