@@ -1,4 +1,6 @@
+import { DealState, MAX_SEARCH_LENGTH } from "@escrow-lab/shared";
 import { useQuery } from "@tanstack/react-query";
+import { useState } from "react";
 import { fetchDeals } from "./api.ts";
 import { formatMoney } from "./money.ts";
 
@@ -11,7 +13,27 @@ export interface DealListProps {
 }
 
 export function DealList({ canCreate, onOpen, onCreate, onPayouts }: DealListProps) {
-  const deals = useQuery({ queryKey: ["deals"], queryFn: ({ signal }) => fetchDeals(signal) });
+  const [q, setQ] = useState("");
+  const [state, setState] = useState<DealState | "">("");
+  const filtered = q !== "" || state !== "";
+  const deals = useQuery({
+    queryKey: ["deals", { q, state }],
+    queryFn: ({ signal }) => fetchDeals({ q, state }, signal),
+  });
+
+  let statusMessage = "";
+  if (deals.isPending) {
+    statusMessage = "Loading the Deals.";
+  } else if (deals.data) {
+    const { total, deals: rows } = deals.data;
+    if (rows.length === 0) {
+      statusMessage = filtered ? "No Deals match." : "You have no Deals yet.";
+    } else if (total > rows.length) {
+      statusMessage = `This list shows ${String(rows.length)} of ${String(total)} Deals.`;
+    } else if (filtered) {
+      statusMessage = `${String(rows.length)} ${rows.length === 1 ? "Deal" : "Deals"} found.`;
+    }
+  }
 
   return (
     <section aria-labelledby="deals-heading">
@@ -28,14 +50,42 @@ export function DealList({ canCreate, onOpen, onCreate, onPayouts }: DealListPro
           Payout history
         </button>
       )}
-      {deals.isPending && <p role="status">Loading the Deals.</p>}
+      <form
+        role="search"
+        onSubmit={(event) => {
+          event.preventDefault();
+        }}
+      >
+        <label>
+          Search Deals{" "}
+          <input
+            type="search"
+            maxLength={MAX_SEARCH_LENGTH}
+            value={q}
+            onChange={(event) => {
+              setQ(event.target.value);
+            }}
+          />
+        </label>{" "}
+        <label>
+          State{" "}
+          <select
+            value={state}
+            onChange={(event) => {
+              setState(event.target.value as DealState | "");
+            }}
+          >
+            <option value="">Open Deals</option>
+            {DealState.options.map((option) => (
+              <option key={option} value={option}>
+                {option.replace("_", " ")}
+              </option>
+            ))}
+          </select>
+        </label>
+      </form>
+      <p role="status">{statusMessage}</p>
       {deals.isError && <p role="alert">The Deals cannot be loaded. Reload this page.</p>}
-      {deals.data && deals.data.total > deals.data.deals.length && (
-        <p role="status">
-          This list shows {deals.data.deals.length} of {deals.data.total} Deals.
-        </p>
-      )}
-      {deals.data?.deals.length === 0 && <p>You have no Deals yet.</p>}
       {deals.data && deals.data.deals.length > 0 && (
         <ul>
           {deals.data.deals.map((deal) => (

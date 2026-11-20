@@ -1,5 +1,5 @@
 {
-  "id": "78f58b72-91cf-4f9d-a4a2-c4b805f78f17",
+  "id": "47ef110f-aff7-4f58-8900-8f29c251961c",
   "prevId": "c4e188f0-eade-4936-aac3-cc9c21df8744",
   "version": "7",
   "dialect": "postgresql",
@@ -242,13 +242,6 @@
           "notNull": true,
           "default": "'draft'"
         },
-        "express": {
-          "name": "express",
-          "type": "boolean",
-          "primaryKey": false,
-          "notNull": true,
-          "default": true
-        },
         "funding_idempotency_key": {
           "name": "funding_idempotency_key",
           "type": "text",
@@ -305,6 +298,21 @@
           "isUnique": false,
           "concurrently": false,
           "method": "btree",
+          "with": {}
+        },
+        "deals_title_trgm_idx": {
+          "name": "deals_title_trgm_idx",
+          "columns": [
+            {
+              "expression": "\"title\" gin_trgm_ops",
+              "asc": true,
+              "isExpression": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "gin",
           "with": {}
         }
       },
@@ -603,14 +611,7 @@
           "name": "approved_by",
           "type": "uuid",
           "primaryKey": false,
-          "notNull": false
-        },
-        "express": {
-          "name": "express",
-          "type": "boolean",
-          "primaryKey": false,
-          "notNull": true,
-          "default": false
+          "notNull": true
         },
         "chain_tx_id": {
           "name": "chain_tx_id",

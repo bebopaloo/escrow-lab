@@ -11,6 +11,7 @@ import {
   NoteResponse,
   NotesResponse,
   PAYMENT_FAILED,
+  PageQuery,
   PayoutHistoryResponse,
   ReferenceParams,
   SELLER_MUST_BE_SELLER,
@@ -66,8 +67,8 @@ export const dealRoutes: FastifyPluginCallbackZod<DealsOptions> = (
       schema: { querystring: ListDealsQuery, response: { 200: DealListResponse } },
     },
     async (request) => {
-      const { limit, offset } = request.query;
-      const page = await listDeals(db, request.user?.id ?? "", limit, offset);
+      const { limit, offset, q, state } = request.query;
+      const page = await listDeals(db, request.user?.id ?? "", { limit, offset, q, state });
       return { ...page, limit, offset };
     },
   );
@@ -76,7 +77,7 @@ export const dealRoutes: FastifyPluginCallbackZod<DealsOptions> = (
     "/payouts/mine",
     {
       onRequest: requireRole(db, "seller"),
-      schema: { querystring: ListDealsQuery, response: { 200: PayoutHistoryResponse } },
+      schema: { querystring: PageQuery, response: { 200: PayoutHistoryResponse } },
     },
     async (request) => {
       const { limit, offset } = request.query;

@@ -1,6 +1,6 @@
 import { SEED_USERS, schema, seedUsers } from "@escrow-lab/db";
 import { DealListResponse, DealResponse, ErrorResponse } from "@escrow-lab/shared";
-import { and, eq } from "drizzle-orm";
+import { and, eq, ne } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { buildApp } from "../src/app.ts";
 import { openTestDatabase, testConfig } from "./database.ts";
@@ -228,7 +228,7 @@ describe("deals", () => {
     const owned = await database.db
       .select({ id: schema.deals.id })
       .from(schema.deals)
-      .where(eq(schema.deals.buyerId, ALICE));
+      .where(and(eq(schema.deals.buyerId, ALICE), ne(schema.deals.state, "cancelled")));
     expect(body.total).toBe(owned.length);
     expect(body.limit).toBe(2);
     const second = DealListResponse.parse(
